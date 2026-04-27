@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Orleans.EventSourcing.Kurrent</PackageId>
+    <Authors>William Gunaratne</Authors>
+    <Title>Kurrent for Microsoft Orleans Event-Sourcing</Title>
+    <Description>Kurrent client implementation of log consistency provider for Microsoft Orleans EventSourcing.</Description>
+    <RootNamespace>Orleans.EventSourcing.Kurrent</RootNamespace>
+    <AnalysisLevel>latest-all</AnalysisLevel>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);CA1873</WarningsNotAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- The package's own implementation of IGrainEventProvider intentionally consumes the experimental API. -->
+    <NoWarn>$(NoWarn);OEK0001</NoWarn>
+  </PropertyGroup>	
+  <ItemGroup>
+    <InternalsVisibleTo Include="Orleans.EventSourcing.Kurrent.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="KurrentDB.Client" />
+    <PackageReference Include="Microsoft.Orleans.EventSourcing" />
+    <PackageReference Include="Microsoft.Orleans.Sdk" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,45 @@
+<Project>
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>10.1.0</Version>
+  </PropertyGroup>
+
+  <!-- Shared package metadata. Per-project metadata (PackageId, Title, Description, etc.) lives in each csproj. -->
+  <PropertyGroup>
+    <Authors>Orleans.EventSourcing.Kurrent contributors</Authors>
+    <Company>Orleans.EventSourcing.Kurrent contributors</Company>
+    <Copyright>Copyright (c) Orleans.EventSourcing.Kurrent contributors</Copyright>
+    <PackageProjectUrl>https://github.com/OrleansContrib/Orleans.EventSourcing.Kurrent</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/OrleansContrib/Orleans.EventSourcing.Kurrent.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>orleans;eventsourcing;kurrent;eventstore;eventstoredb;log-consistency</PackageTags>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!-- Deterministic builds in CI -->
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true' or '$(TF_BUILD)' == 'true' or '$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!-- Pack the shared README.md and LICENSE.md alongside any package produced from this repo. -->
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)LICENSE.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <!-- SourceLink + MinVer for packable projects only. -->
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+    <PackageReference Include="MinVer" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!-- MinVer derives the package version from the latest 'v*' git tag. -->
+  <PropertyGroup Condition="'$(IsPackable)' != 'false'">
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+  </PropertyGroup>
+</Project>

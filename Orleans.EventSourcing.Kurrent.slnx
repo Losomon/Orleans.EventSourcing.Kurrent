@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="README.md" />
+    <File Path="LICENSE.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Orleans.EventSourcing.Kurrent/Orleans.EventSourcing.Kurrent.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Orleans.EventSourcing.Kurrent.Tests/Orleans.EventSourcing.Kurrent.Tests.csproj" />
+  </Folder>
+</Solution>
