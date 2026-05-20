@@ -1,0 +1,45 @@
+name: Publish to NuGet
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  id-token: write # for NuGet trusted publishing (OIDC)
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  publish:
+    name: Push to NuGet.org
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p packages
+          gh release download "${{ github.event.release.tag_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.nupkg" \
+            --dir packages
+          gh release download "${{ github.event.release.tag_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.snupkg" \
+            --dir packages
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Push to NuGet.org (trusted publishing)
+        run: |
+          dotnet nuget push "packages/*.nupkg" \
+            --api-key az \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
