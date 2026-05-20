@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write # for creating GitHub releases
+  id-token: write # for NuGet trusted publishing (OIDC)
 
 env:
   DOTNET_NOLOGO: true
@@ -54,16 +55,10 @@ jobs:
             ${{ github.workspace }}/artifacts/*.snupkg
           if-no-files-found: error
 
-      - name: Push to NuGet.org
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      - name: Push to NuGet.org (trusted publishing)
         run: |
-          if [ -z "$NUGET_API_KEY" ]; then
-            echo "::error::NUGET_API_KEY secret is not configured."
-            exit 1
-          fi
           dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg" \
-            --api-key "$NUGET_API_KEY" \
+            --api-key az \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
 

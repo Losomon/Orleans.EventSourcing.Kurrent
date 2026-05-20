@@ -18,5 +18,7 @@
     <PackageReference Include="KurrentDB.Client" />
     <PackageReference Include="Microsoft.Orleans.EventSourcing" />
     <PackageReference Include="Microsoft.Orleans.Sdk" />
+    <!-- Pin transitive OpenTelemetry.Api above the vulnerable 1.12.0 brought in by KurrentDB.Client (GHSA-g94r-2vxg-569j). -->
+    <PackageReference Include="OpenTelemetry.Api" />
   </ItemGroup>
 </Project>
