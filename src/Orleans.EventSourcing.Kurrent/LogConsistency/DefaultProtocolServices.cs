@@ -33,10 +33,7 @@ internal sealed class DefaultProtocolServices(
     public string MyClusterId { get; } = siloDetails.ClusterId;
 
     /// <inheritdoc />
-    public T DeepCopy<T>(T value)
-    {
-        return deepCopier.Copy(value);
-    }
+    public T DeepCopy<T>(T value) => deepCopier.Copy(value);
 
     /// <inheritdoc />
     public void ProtocolError(string msg, bool throwexception)
@@ -53,16 +50,10 @@ internal sealed class DefaultProtocolServices(
     }
 
     /// <inheritdoc />
-    public void CaughtException(string where, Exception ex)
-    {
-        _logger.CaughtException(grainContext.GrainId, where, ex);
-    }
+    public void CaughtException(string where, Exception ex) => _logger.CaughtException(grainContext.GrainId, where, ex);
 
     /// <inheritdoc />
-    public void CaughtUserCodeException(string callback, string where, Exception ex)
-    {
-        _logger.UserCodeException(grainContext.GrainId, callback, where, ex);
-    }
+    public void CaughtUserCodeException(string callback, string where, Exception ex) => _logger.UserCodeException(grainContext.GrainId, callback, where, ex);
 
     /// <inheritdoc />
     public void Log(LogLevel level, string format, params object[] args)

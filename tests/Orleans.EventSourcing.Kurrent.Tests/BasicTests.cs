@@ -15,18 +15,17 @@ using Orleans.TestingHost;
 using Orleans.EventSourcing.Kurrent.Hosting;
 using Orleans.EventSourcing.Kurrent.Storage;
 using Orleans.EventSourcing.Kurrent.Tests.Grains;
+using Orleans.EventSourcing.Kurrent.Projections;
 
 namespace Orleans.EventSourcing.Kurrent.Tests;
 
-public class BasicTests : IAsyncLifetime
+public sealed class BasicTests : IAsyncLifetime
 {
     static readonly KurrentDBClientSettings clientSettings = KurrentDBClientSettings.Create("esdb://localhost:2113?tls=false");
 
     private InProcessTestCluster cluster = null!;
     private ExceptionalKurrentClientWrapper kurrentClient = null!;
     private IKurrentStreamNameProvider streamNameProvider = null!;
-
-    private static CancellationToken TestToken => TestContext.Current.CancellationToken;
 
     public async ValueTask InitializeAsync()
     {
@@ -189,7 +188,7 @@ public class BasicTests : IAsyncLifetime
         Assert.Equal(powersOfTwo.Count * 3, (await account.GetEvents()).Count);
 
         // remove the first iteration of deposits
-        await kurrentClient.SetStreamMetadata(streamNameProvider.GetStreamName(account.GetGrainId()), StreamState.NoStream, new StreamMetadata(truncateBefore: StreamPosition.FromStreamRevision(10)), CancellationToken.None);
+        await kurrentClient.SetStreamMetadata(streamNameProvider.GetStreamName(account.GetGrainId()), StreamState.NoStream, new StreamMetadata(truncateBefore: StreamPosition.FromStreamRevision(10)), TestContext.Current.CancellationToken);
         Assert.Equal(powersOfTwo.Count * 2, (await account.GetEvents()).Count);
 
         Assert.Equal((powersOfTwo[^1] * 2) - 1, await account.GetConfirmedBalance());
@@ -201,7 +200,7 @@ public class BasicTests : IAsyncLifetime
         // remove the events from all above iterations and check the last added event remains
         await account.Deposit(77);
         Assert.Equal(77, await account.GetConfirmedBalance());
-        await kurrentClient.SetStreamMetadata(streamNameProvider.GetStreamName(account.GetGrainId()), StreamState.StreamRevision(0), new StreamMetadata(truncateBefore: StreamPosition.FromStreamRevision(30)), CancellationToken.None);
+        await kurrentClient.SetStreamMetadata(streamNameProvider.GetStreamName(account.GetGrainId()), StreamState.StreamRevision(0), new StreamMetadata(truncateBefore: StreamPosition.FromStreamRevision(30)), TestContext.Current.CancellationToken);
         Assert.Single(await account.GetEvents());
         await account.RefreshNow();
         Assert.Equal(77, await account.GetConfirmedBalance());
@@ -312,32 +311,28 @@ public class BasicTests : IAsyncLifetime
     [Fact(Timeout = 5000)]
     public async Task ProjectionAbstractBaseType()
     {
-        var token = TestToken;
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
-        await Assert.ThrowsAsync<NotSupportedException>(() => grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(AccountEvent)], token).ToListAsync(token).AsTask());
+        await Assert.ThrowsAsync<NotSupportedException>(() => grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(AccountEvent)], TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken).AsTask());
     }
 
     [Fact(Timeout = 5000)]
     public async Task ProjectionNoTypes()
     {
-        var token = TestToken;
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
-        await Assert.ThrowsAsync<ArgumentException>(() => grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [], token).ToListAsync(token).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [], TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken).AsTask());
     }
 
     [Fact(Timeout = 5000)]
     public async Task ProjectionCannotCastToBaseEvent()
     {
-        var token = TestToken;
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
-        await Assert.ThrowsAsync<ArgumentException>(() => grainProjectionProvider.SubscribeToGrainEvents<string>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(object)], token).ToListAsync(token).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => grainProjectionProvider.SubscribeToGrainEvents<string>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(object)], TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken).AsTask());
     }
 
     [Fact(Timeout = 5000)]
     public async Task ProjectionAggregation()
     {
-        var token = TestToken;
-        Guid[] idsForThisTest = { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        Guid[] idsForThisTest = [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()];
 
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
 
@@ -349,9 +344,9 @@ public class BasicTests : IAsyncLifetime
             int creditRatingSum = 0;
             int creditRatingCount = 0;
 
-            await foreach (var update in grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, new[] { typeof(AccountEvent.Deposited), typeof(UserEvent.UserCreditRatingChanged) }, token).WithCancellation(token))
+            await foreach (var update in grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(AccountEvent.Deposited), typeof(UserEvent.UserCreditRatingChanged)], TestContext.Current.CancellationToken).WithCancellation(TestContext.Current.CancellationToken))
             {
-                if (update is not EventStreamUpdate.GrainEvent<object> grainEvent
+                if (update is not GrainEvent<object> grainEvent
                 || !idsForThisTest.Contains(grainEvent.EventGrainId.GetGuidKey()))
                 {
                     continue; // skip events from other unit tests
@@ -389,7 +384,6 @@ public class BasicTests : IAsyncLifetime
     [Fact(Timeout = 5000)]
     public async Task ProjectionSubscribeReturnsEventsInOrder()
     {
-        var token = TestToken;
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
         var accountId = Guid.NewGuid();
         var account = cluster.Client.GetGrain<IAccountGrain>(accountId);
@@ -400,9 +394,9 @@ public class BasicTests : IAsyncLifetime
 
         var receivedEvents = new List<object>();
 
-        await foreach (var update in grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, new[] { typeof(AccountEvent.Deposited), typeof(AccountEvent.Withdrawn) }, token).WithCancellation(token))
+        await foreach (var update in grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(AccountEvent.Deposited), typeof(AccountEvent.Withdrawn)], TestContext.Current.CancellationToken).WithCancellation(TestContext.Current.CancellationToken))
         {
-            if (update is EventStreamUpdate.GrainEvent<object> grainEvent
+            if (update is GrainEvent<object> grainEvent
                 && grainEvent.EventGrainId.GetGuidKey() == accountId)
             {
                 receivedEvents.Add(grainEvent.Event);
@@ -421,7 +415,6 @@ public class BasicTests : IAsyncLifetime
     [Fact(Timeout = 5000)]
     public async Task ProjectionSubscribeNotificationReturnsEventsInOrder()
     {
-        var token = TestToken;
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
         var accountId = Guid.NewGuid();
         var account = cluster.Client.GetGrain<IAccountGrain>(accountId);
@@ -432,9 +425,9 @@ public class BasicTests : IAsyncLifetime
 
         var receivedEvents = new List<int>();
 
-        await foreach (var update in grainProjectionProvider.SubscribeToGrainEventNotifications(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(AccountEvent.Deposited), typeof(AccountEvent.Withdrawn)], token).WithCancellation(token).ConfigureAwait(false))
+        await foreach (var update in grainProjectionProvider.SubscribeToGrainEventNotifications(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(AccountEvent.Deposited), typeof(AccountEvent.Withdrawn)], TestContext.Current.CancellationToken).WithCancellation(TestContext.Current.CancellationToken).ConfigureAwait(false))
         {
-            if (update is EventStreamUpdate.GrainEventNotification grainEvent
+            if (update is GrainEventNotification grainEvent
                 && grainEvent.EventGrainId.GetGuidKey() == accountId)
             {
                 receivedEvents.Add(grainEvent.EventGrainVersion);
@@ -452,7 +445,6 @@ public class BasicTests : IAsyncLifetime
     [Fact(Timeout = 5000)]
     public async Task ProjectionEventNumbersMatchGrainVersionNumbers()
     {
-        var token = TestToken;
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
         var accountId = Guid.NewGuid();
         var account = cluster.Client.GetGrain<IAccountGrain>(accountId);
@@ -461,9 +453,9 @@ public class BasicTests : IAsyncLifetime
 
         var receivedEventVersions = new List<int>();
 
-        await foreach (var update in grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, new[] { typeof(AccountEvent.Deposited), typeof(AccountEvent.Withdrawn) }, token).WithCancellation(token))
+        await foreach (var update in grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(AccountEvent.Deposited), typeof(AccountEvent.Withdrawn)], TestContext.Current.CancellationToken).WithCancellation(TestContext.Current.CancellationToken))
         {
-            if (update is EventStreamUpdate.GrainEvent<object> grainEvent
+            if (update is GrainEvent<object> grainEvent
                 && grainEvent.EventGrainId.GetGuidKey() == accountId)
             {
                 receivedEventVersions.Add(grainEvent.EventGrainVersion);
@@ -479,7 +471,6 @@ public class BasicTests : IAsyncLifetime
     [Fact(Timeout = 5000)]
     public async Task ProjectionSubscribeSkipsUnrelatedEvents()
     {
-        var token = TestToken;
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
         var accountId = Guid.NewGuid();
         var userId = Guid.NewGuid();
@@ -491,9 +482,9 @@ public class BasicTests : IAsyncLifetime
 
         var receivedEvents = new List<object>();
 
-        await foreach (var update in grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, new[] { typeof(AccountEvent.Deposited) }, token).WithCancellation(token))
+        await foreach (var update in grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(AccountEvent.Deposited)], TestContext.Current.CancellationToken).WithCancellation(TestContext.Current.CancellationToken))
         {
-            if (update is EventStreamUpdate.GrainEvent<object> grainEvent
+            if (update is GrainEvent<object> grainEvent
                 && grainEvent.EventGrainId.GetGuidKey() == accountId)
             {
                 receivedEvents.Add(grainEvent.Event);
@@ -508,35 +499,27 @@ public class BasicTests : IAsyncLifetime
     [Fact(Timeout = 5000)]
     public async Task ProjectionThrowsOnNullTypeArray()
     {
-        var token = TestToken;
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, null!, token).ToListAsync(token).AsTask());
+            grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, null!, TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken).AsTask());
     }
 
     [Fact(Timeout = 5000)]
     public async Task ProjectionThrowsOnDefaultSubscriber()
     {
-        var token = TestToken;
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            grainProjectionProvider.SubscribeToGrainEvents<object>(default, GlobalEventLogPosition.Start, new[] { typeof(AccountEvent.Deposited) }, token).ToListAsync(token).AsTask());
+            grainProjectionProvider.SubscribeToGrainEvents<object>(default, GlobalEventLogPosition.Start, [typeof(AccountEvent.Deposited)], TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken).AsTask());
     }
 
     [Fact(Timeout = 5000)]
     public async Task ProjectionCaughtUp()
     {
-        var token = TestToken;
-        var accountId = Guid.NewGuid();
-        var account = cluster.Client.GetGrain<IAccountGrain>(accountId);
-
-        using CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
 
-        await foreach (var update in grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, new[] { typeof(AccountEvent.Deposited) }, token).WithCancellation(token))
+        await foreach (var update in grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(AccountEvent.Deposited)], TestContext.Current.CancellationToken).WithCancellation(TestContext.Current.CancellationToken))
         {
-            if (update is EventStreamUpdate.CaughtUp)
+            if (update is CaughtUp)
             {
                 break;
             }

@@ -10,7 +10,7 @@ namespace Orleans.EventSourcing.Kurrent.Storage;
 /// <summary>
 ///     Factory used to create instances of KurrentClient
 /// </summary>
-public static class KurrentClientFactory
+internal static class KurrentClientFactory
 {
     public static Uri InMemoryEmulatorUri { get; } = new Uri("https://kurrentemulator:2113/");
     readonly static ConcurrentDictionary<string, IKurrentClient> Clients = [];

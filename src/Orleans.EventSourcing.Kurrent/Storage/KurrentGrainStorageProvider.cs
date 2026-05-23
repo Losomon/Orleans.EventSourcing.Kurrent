@@ -13,8 +13,6 @@ namespace Orleans.EventSourcing.Kurrent.Storage;
 ///      Kurrent-based log consistent storage provider. This uses soft-delete for ClearStateAsync() but could
 ///      be changed to write a 'Deleted' event instead, possibly by updating KurrentStorageOptions with a flag.
 /// </summary>
-/// <param name="kurrentClient"></param>
-/// <param name="eventSerializer"></param>
 internal sealed class KurrentGrainStorageProvider(IKurrentClient kurrentClient, IEventSerializerFactory eventSerializer, IKurrentStreamNameProvider streamNameProvider) : IGrainStorage
 {
     private static StreamState ConvertETagToStreamState(string? eTag)
@@ -70,7 +68,7 @@ internal sealed class KurrentGrainStorageProvider(IKurrentClient kurrentClient, 
     {
         var observabilityTags = new TagList
         {
-            { "GrainType", grainId.Type.ToString() },
+            { "GrainType", grainId.Type },
             { "StateName", stateName },
             { "Type", typeof(T).Name }
         };
@@ -141,7 +139,7 @@ internal sealed class KurrentGrainStorageProvider(IKurrentClient kurrentClient, 
     {
         var observabilityTags = new TagList
         {
-            { "GrainType", grainId.Type.ToString() },
+            { "GrainType", grainId.Type },
             { "StateName", stateName },
             { "Type", typeof(T).Name }
         };

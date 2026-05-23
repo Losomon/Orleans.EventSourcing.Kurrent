@@ -86,20 +86,11 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
 
     #region stats
 
-    public void DisableStatsCollection()
-    {
-        throw new NotImplementedException();
-    }
+    public void DisableStatsCollection() => throw new NotImplementedException();
 
-    public void EnableStatsCollection()
-    {
-        throw new NotImplementedException();
-    }
+    public void EnableStatsCollection() => throw new NotImplementedException();
 
-    public LogConsistencyStatistics GetStats()
-    {
-        throw new NotImplementedException();
-    }
+    public LogConsistencyStatistics GetStats() => throw new NotImplementedException();
 
     #endregion
 
@@ -391,8 +382,5 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
         }
     }
 
-    private void EnqueueNewWorkItem(WorkItemType type, TaskCompletionSource<bool>? taskCompletionSource)
-    {
-        ObjectDisposedException.ThrowIf(!queue.Writer.TryWrite(new WorkItem(type, taskCompletionSource, ExecutionContext.Capture())), this);
-    }
+    private void EnqueueNewWorkItem(WorkItemType type, TaskCompletionSource<bool>? taskCompletionSource) => ObjectDisposedException.ThrowIf(!queue.Writer.TryWrite(new WorkItem(type, taskCompletionSource, ExecutionContext.Capture())), this);
 }

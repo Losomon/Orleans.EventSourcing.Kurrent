@@ -4,7 +4,7 @@ namespace Orleans.EventSourcing.Kurrent.Observability;
 
 internal static class Metrics
 {
-    readonly static Meter Shared = new Meter("Orleans.EventSourcing.Kurrent");
+    readonly static Meter Shared = new("Orleans.EventSourcing.Kurrent");
 
     public readonly static Counter<int> CatchupEventsProcessed = Shared.CreateCounter<int>("Catchup.Events", "count", "Number of events processed");
     public readonly static Counter<int> CatchUpNotificationsProcessed = Shared.CreateCounter<int>("Catchup.Notifications", "count", "Number of notifications processed");

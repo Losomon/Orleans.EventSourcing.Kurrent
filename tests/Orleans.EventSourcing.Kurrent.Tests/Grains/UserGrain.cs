@@ -12,10 +12,7 @@ interface IUserGrain : IGrainWithGuidKey
 public class UserState
 {
     byte currentCreditRating;
-    public void Apply(UserEvent.UserCreditRatingChanged userCreditRatingChanged)
-    {
-        currentCreditRating = userCreditRatingChanged.CreditRating;
-    }
+    public void Apply(UserEvent.UserCreditRatingChanged userCreditRatingChanged) => currentCreditRating = userCreditRatingChanged.CreditRating;
 }
 
 public abstract record UserEvent

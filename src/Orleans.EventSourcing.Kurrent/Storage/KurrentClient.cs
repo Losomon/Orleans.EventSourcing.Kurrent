@@ -4,7 +4,7 @@ using KurrentDB.Client;
 
 namespace Orleans.EventSourcing.Kurrent.Storage;
 
-public sealed class KurrentClient(KurrentDBClientSettings settings) : IKurrentClient
+internal sealed class KurrentClient(KurrentDBClientSettings settings) : IKurrentClient
 {
     private readonly KurrentDBClient client = new(settings);
 

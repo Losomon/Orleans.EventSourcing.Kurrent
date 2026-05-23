@@ -75,7 +75,7 @@ internal sealed class KurrentGrainEventProvider(GrainInterfaceTypeResolver grain
 
                     if (eventSerializer is not null)
                     {
-                        TagList eventTags = new TagList();
+                        TagList eventTags = new();
                         foreach (var tag in observabilityTags)
                         {
                             eventTags.Add(tag);
@@ -86,25 +86,25 @@ internal sealed class KurrentGrainEventProvider(GrainInterfaceTypeResolver grain
                         var deserializedEvent = eventSerializer.DeserializeEvent(eventMessage.ResolvedEvent);
                         Metrics.EventDeserializationLatency.Record(stopwatch.ElapsedMilliseconds, eventTags);
 
-                        logger.EventReceived(subscriber, eventMessage.ResolvedEvent.OriginalPosition, grainId, eventMessage.ResolvedEvent.OriginalEventNumber.ToVersion(), deserializedEvent);
+                        logger.EventReceived(subscriber, eventMessage.ResolvedEvent.OriginalPosition, grainId, eventMessage.ResolvedEvent.OriginalEventNumber, deserializedEvent);
                         Metrics.CatchupEventsProcessed.Add(1, eventTags);
                         stopwatch.Restart();
-                        yield return new EventStreamUpdate.GrainEvent<TEventBase>(eventMessage.ResolvedEvent.OriginalPosition!.Value.ToGlobalEventLogPosition(), deserializedEvent, grainId, eventMessage.ResolvedEvent.OriginalEventNumber.ToVersion());
+                        yield return new GrainEvent<TEventBase>(eventMessage.ResolvedEvent.OriginalPosition!.Value.ToGlobalEventLogPosition(), deserializedEvent, grainId, eventMessage.ResolvedEvent.OriginalEventNumber.ToVersion());
                         Metrics.CatchupEventYieldLatency.Record(stopwatch.ElapsedMilliseconds, eventTags);
                     }
                     else
                     {
-                        TagList eventTags = new TagList();
+                        TagList eventTags = new();
                         foreach (var tag in observabilityTags)
                         {
                             eventTags.Add(tag);
                         }
                         eventTags.Add("EventType", eventMessage.ResolvedEvent.Event.EventType);
-                        logger.EventNotificationReceived(subscriber, eventMessage.ResolvedEvent.OriginalPosition, grainId, eventMessage.ResolvedEvent.OriginalEventNumber.ToVersion());
+                        logger.EventNotificationReceived(subscriber, eventMessage.ResolvedEvent.OriginalPosition, grainId, eventMessage.ResolvedEvent.OriginalEventNumber);
                         Metrics.CatchUpNotificationsProcessed.Add(1, eventTags);
 
                         var stopwatch = Stopwatch.StartNew();
-                        yield return new EventStreamUpdate.GrainEventNotification(eventMessage.ResolvedEvent.OriginalPosition!.Value.ToGlobalEventLogPosition(), grainId, eventMessage.ResolvedEvent.OriginalEventNumber.ToVersion());
+                        yield return new GrainEventNotification(eventMessage.ResolvedEvent.OriginalPosition!.Value.ToGlobalEventLogPosition(), grainId, eventMessage.ResolvedEvent.OriginalEventNumber.ToVersion());
                         Metrics.CatchupNotificationYieldLatency.Record(stopwatch.ElapsedMilliseconds, eventTags);
                     }
                     break;
@@ -114,7 +114,7 @@ internal sealed class KurrentGrainEventProvider(GrainInterfaceTypeResolver grain
                     Metrics.CatchUpCheckpoints.Add(1, observabilityTags);
 
                     var checkpointYieldTime = Stopwatch.StartNew();
-                    yield return new EventStreamUpdate.Checkpoint(checkpoint.Position.ToGlobalEventLogPosition());
+                    yield return new Checkpoint(checkpoint.Position.ToGlobalEventLogPosition());
                     Metrics.CatchupCheckpointYieldLatency.Record(checkpointYieldTime.ElapsedMilliseconds, observabilityTags);
                     break;
                 case StreamMessage.CaughtUp:
@@ -122,14 +122,14 @@ internal sealed class KurrentGrainEventProvider(GrainInterfaceTypeResolver grain
                     logger.SubscriptionCaughtUp(subscriber);
                     Metrics.CatchUpLive.Record(1, observabilityTags);
 
-                    yield return EventStreamUpdate.CaughtUp.Instance;
+                    yield return CaughtUp.Instance;
                     break;
                 case StreamMessage.FellBehind:
 
                     logger.SubscriptionFellBehind(subscriber);
                     Metrics.CatchUpLive.Record(0, observabilityTags);
 
-                    yield return EventStreamUpdate.FallenBehind.Instance;
+                    yield return FallenBehind.Instance;
                     break;
             }
         }

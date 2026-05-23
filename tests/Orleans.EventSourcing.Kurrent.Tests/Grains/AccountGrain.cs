@@ -101,34 +101,20 @@ namespace Orleans.EventSourcing.Kurrent.Tests.Grains
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask<decimal> GetConfirmedBalance()
-        {
-            return ValueTask.FromResult(State.Balance);
-        }
+        public ValueTask<decimal> GetConfirmedBalance() => ValueTask.FromResult(State.Balance);
 
-        public ValueTask<decimal> GetTentativeBalance()
-        {
-            return ValueTask.FromResult(TentativeState.Balance);
-        }
+        public ValueTask<decimal> GetTentativeBalance() => ValueTask.FromResult(TentativeState.Balance);
 
-        public new Task RefreshNow()
-        {
+        public new Task RefreshNow() =>
             // call base class RefreshNow directly (bypass protected definition)
-            return base.RefreshNow();
-        }
+            base.RefreshNow();
 
-        public Task<IReadOnlyList<AccountEvent>> GetEvents()
-        {
-            return base.RetrieveConfirmedEvents(0, this.Version);
-        }
+        public Task<IReadOnlyList<AccountEvent>> GetEvents() => base.RetrieveConfirmedEvents(0, this.Version);
 
         public async Task<AccountEvent?> GetEventAtVersion(int version) =>
             (await base.RetrieveConfirmedEvents(version, version)).FirstOrDefault();
 
-        public Task<int> GetConfirmedVersion()
-        {
-            return Task.FromResult(this.Version);
-        }
+        public Task<int> GetConfirmedVersion() => Task.FromResult(this.Version);
 
         public async Task<bool> Withdraw(decimal amount)
         {

@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Orleans.EventSourcing.Kurrent;
 
 /// <summary>
@@ -23,8 +25,35 @@ public abstract class EventEnvelope(Guid eventId, IDictionary<string, string>? m
     [Id(1)]
     public IDictionary<string, string>? Metadata { get; } = metadata;
 
-    public override bool Equals(object? obj) => obj is EventEnvelope other && other.EventId == this.EventId;
+    /// <inheritdoc />
+    public override bool Equals(object? obj) => Equals(obj as EventEnvelope);
 
+    /// <summary>
+    /// Determines whether the given <see cref="EventEnvelope"/> is equal to this instance.
+    /// </summary>
+    /// <param name="other">The <see cref="EventEnvelope"/> to compare with this instance.</param>
+    /// <returns><c>true</c> if the specified <see cref="EventEnvelope"/> is equal to this instance; otherwise, <c>false</c>.</returns>
+    protected bool Equals(EventEnvelope? other)
+    {
+        if (other is null
+            || other.EventId != this.EventId
+            || other.Metadata?.Count != this.Metadata?.Count)
+            return false;
+
+        if (other.Metadata != null && this.Metadata != null)
+        {
+            foreach (var kvp in other.Metadata)
+            {
+                if (!this.Metadata.TryGetValue(kvp.Key, out var value)
+                    || value != kvp.Value)
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <inheritdoc />
     public override int GetHashCode() => EventId.GetHashCode();
 }
 
@@ -39,7 +68,7 @@ public abstract class EventEnvelope(Guid eventId, IDictionary<string, string>? m
 // This type needs to be serializable for event sourcing providers that do not natively understand this type
 // such as the built-in Orleans providers used for unit testing.
 [GenerateSerializer]
-[Alias("Events.EventEnvelope`1")]
+[Alias("Orleans.EventSourcing.EventEnvelope`1")]
 [Immutable]
 public sealed class EventEnvelope<TEvent>(Guid eventId, TEvent @event, IDictionary<string, string>? metadata = null) : EventEnvelope(eventId, metadata), IEquatable<EventEnvelope<TEvent>>
     where TEvent : class
@@ -50,9 +79,18 @@ public sealed class EventEnvelope<TEvent>(Guid eventId, TEvent @event, IDictiona
     [Id(0)]
     public TEvent Event { get; } = @event;
 
-    public bool Equals(EventEnvelope<TEvent>? other) => other is { } x && base.Equals(other);
+    /// <inheritdoc />
+    public bool Equals(EventEnvelope<TEvent>? other)
+    {
+        if (!base.Equals(other))
+            return false;
 
+        return EqualityComparer<TEvent>.Default.Equals(this.Event, other?.Event);
+    }
+
+    /// <inheritdoc />
     public override bool Equals(object? obj) => Equals(obj as EventEnvelope<TEvent>);
 
+    /// <inheritdoc />
     public override int GetHashCode() => base.GetHashCode();
 }

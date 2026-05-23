@@ -3,7 +3,7 @@ using KurrentDB.Client;
 namespace Orleans.EventSourcing.Kurrent.Storage;
 
 // This very thin wrapper around EventStoreClient allows unit test substitution
-public interface IKurrentClient : IDisposable, IAsyncDisposable
+internal interface IKurrentClient : IDisposable, IAsyncDisposable
 {
     public Task<IWriteResult> SetStreamMetadata(string streamName,
                                                  StreamState expectedRevision,

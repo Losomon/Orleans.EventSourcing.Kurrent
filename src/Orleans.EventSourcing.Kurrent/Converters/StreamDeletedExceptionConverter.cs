@@ -8,13 +8,7 @@ internal readonly record struct StreamDeletedExceptionSurrogate(string Stream);
 [RegisterConverter]
 internal sealed class StreamDeletedExceptionConverter : IConverter<StreamDeletedException, StreamDeletedExceptionSurrogate>
 {
-    public StreamDeletedException ConvertFromSurrogate(in StreamDeletedExceptionSurrogate surrogate)
-    {
-        return new StreamDeletedException(surrogate.Stream);
-    }
+    public StreamDeletedException ConvertFromSurrogate(in StreamDeletedExceptionSurrogate surrogate) => new(surrogate.Stream);
 
-    public StreamDeletedExceptionSurrogate ConvertToSurrogate(in StreamDeletedException value)
-    {
-        return new(value.Stream);
-    }
+    public StreamDeletedExceptionSurrogate ConvertToSurrogate(in StreamDeletedException value) => new(value.Stream);
 }

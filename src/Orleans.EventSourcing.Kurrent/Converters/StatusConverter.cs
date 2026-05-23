@@ -8,13 +8,7 @@ internal readonly record struct StatusSurrogate(StatusCode StatusCode, string De
 [RegisterConverter]
 internal sealed class StatusConverter : IConverter<Status, StatusSurrogate>
 {
-    public Status ConvertFromSurrogate(in StatusSurrogate surrogate)
-    {
-        return new Status(surrogate.StatusCode, surrogate.Detail);
-    }
+    public Status ConvertFromSurrogate(in StatusSurrogate surrogate) => new(surrogate.StatusCode, surrogate.Detail);
 
-    public StatusSurrogate ConvertToSurrogate(in Status value)
-    {
-        return new StatusSurrogate(value.StatusCode, value.Detail);
-    }
+    public StatusSurrogate ConvertToSurrogate(in Status value) => new(value.StatusCode, value.Detail);
 }

@@ -154,7 +154,7 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
                 var eventRecord = CreateEventRecord(newEvent, streamName, new StreamPosition(nextEventNumber), new Position((ulong)all.Count, (ulong)all.Count));
                 events.Add(all.Count);
                 all.Add(eventRecord);
-                await newEventWatcher.Publish(eventRecord, cancellationToken).ConfigureAwait(false);
+                newEventWatcher.Publish(eventRecord);
             }
 
             streamState = StreamState.StreamRevision(all[events[^1]].EventNumber);
@@ -343,14 +343,14 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
         private readonly List<Channel<T>> subscribers = [];
         private bool disposed;
 
-        public ValueTask Publish(T item, CancellationToken cancellationToken)
+        public void Publish(T item)
         {
             Channel<T>[] snapshot;
             lock (gate)
             {
                 if (disposed)
                 {
-                    return ValueTask.CompletedTask;
+                    return;
                 }
                 snapshot = [.. subscribers];
             }
@@ -359,8 +359,6 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
             {
                 subscriber.Writer.TryWrite(item);
             }
-
-            return ValueTask.CompletedTask;
         }
 
         public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken)

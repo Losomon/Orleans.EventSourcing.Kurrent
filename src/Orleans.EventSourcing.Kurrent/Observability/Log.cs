@@ -36,21 +36,21 @@ internal static partial class Log
     [LoggerMessage(EventId = (int)ErrorCode.LogConsistency_CaughtException, Level = LogLevel.Error, Message = "{GrainId} exception caught at {Location}")]
     public static partial void CaughtException(this ILogger logger, GrainId grainId, string location, Exception ex);
 
-    [LoggerMessage(EventId = 7, Level = LogLevel.Warning, Message = "{suscription} subscription fell behind")]
-    public static partial void SubscriptionFellBehind(this ILogger logger, GrainId suscription);
+    [LoggerMessage(EventId = 7, Level = LogLevel.Warning, Message = "{subscription} subscription fell behind")]
+    public static partial void SubscriptionFellBehind(this ILogger logger, GrainId subscription);
 
-    [LoggerMessage(EventId = 8, Level = LogLevel.Information, Message = "{suscription} subscription caught-up")]
-    public static partial void SubscriptionCaughtUp(this ILogger logger, GrainId suscription);
+    [LoggerMessage(EventId = 8, Level = LogLevel.Information, Message = "{subscription} subscription caught-up")]
+    public static partial void SubscriptionCaughtUp(this ILogger logger, GrainId subscription);
 
-    [LoggerMessage(EventId = 9, Level = LogLevel.Debug, Message = "{suscription} {position} received notification {eventGrainId} {eventGrainVersion} {eventReceived}")]
-    public static partial void EventReceived(this ILogger logger, GrainId suscription, Position? position, GrainId eventGrainId, int eventGrainVersion, object? eventReceived);
+    [LoggerMessage(EventId = 9, Level = LogLevel.Debug, Message = "{subscription} {position} received notification {eventGrainId} {streamPosition} {eventReceived}")]
+    public static partial void EventReceived(this ILogger logger, GrainId subscription, Position? position, GrainId eventGrainId, StreamPosition streamPosition, object? eventReceived);
 
-    [LoggerMessage(EventId = 10, Level = LogLevel.Debug, Message = "{suscription} received checkpoint {checkpoint}")]
-    public static partial void Checkpoint(this ILogger logger, GrainId suscription, Position checkpoint);
+    [LoggerMessage(EventId = 10, Level = LogLevel.Debug, Message = "{subscription} received checkpoint {checkpoint}")]
+    public static partial void Checkpoint(this ILogger logger, GrainId subscription, Position checkpoint);
 
-    [LoggerMessage(EventId = 11, Level = LogLevel.Information, Message = "{suscription} requesting events '{eventFilter}' from {position}")]
-    public static partial void Subscribe(this ILogger logger, GrainId suscription, GlobalEventLogPosition position, IEventFilter eventFilter);
+    [LoggerMessage(EventId = 11, Level = LogLevel.Information, Message = "{subscription} requesting events '{eventFilter}' from {position}")]
+    public static partial void Subscribe(this ILogger logger, GrainId subscription, GlobalEventLogPosition position, IEventFilter eventFilter);
 
-    [LoggerMessage(EventId = 12, Level = LogLevel.Debug, Message = "{suscription} {position} received notification {eventGrainId} {eventGrainVersion}")]
-    public static partial void EventNotificationReceived(this ILogger logger, GrainId suscription, Position? position, GrainId eventGrainId, int eventGrainVersion);
+    [LoggerMessage(EventId = 12, Level = LogLevel.Debug, Message = "{subscription} {position} received notification {eventGrainId} {streamPosition}")]
+    public static partial void EventNotificationReceived(this ILogger logger, GrainId subscription, Position? position, GrainId eventGrainId, StreamPosition streamPosition);
 }

@@ -22,25 +22,16 @@ record GrainState
 
 internal class StateGrain([PersistentState("test")] IPersistentState<GrainState> state) : Grain, IStateGrain
 {
-    public async Task ClearValue()
-    {
-        await state.ClearStateAsync();
-    }
+    public async Task ClearValue() => await state.ClearStateAsync();
 
-    public ValueTask<string> GetEtag()
-    {
-        return ValueTask.FromResult(state.Etag);
-    }
+#pragma warning disable CS8613 // Nullability of reference types in return type doesn't match implicitly implemented member.
+    public ValueTask<string?> GetEtag()
+#pragma warning restore CS8613 // Nullability of reference types in return type doesn't match implicitly implemented member.
+     => ValueTask.FromResult(state.Etag);
 
-    public ValueTask<int> GetValue()
-    {
-        return ValueTask.FromResult(state.State.Value);
-    }
+    public ValueTask<int> GetValue() => ValueTask.FromResult(state.State.Value);
 
-    public ValueTask<bool> RecordExists()
-    {
-        return ValueTask.FromResult(state.RecordExists);
-    }
+    public ValueTask<bool> RecordExists() => ValueTask.FromResult(state.RecordExists);
 
     public async Task SetValue(int value)
     {

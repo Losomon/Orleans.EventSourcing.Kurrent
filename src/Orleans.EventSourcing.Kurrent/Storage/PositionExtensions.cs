@@ -4,7 +4,7 @@ namespace Orleans.EventSourcing.Kurrent.Storage;
 
 internal static class PositionExtensions
 {
-    public static GlobalEventLogPosition ToGlobalEventLogPosition(this Position position) => new GlobalEventLogPosition(position.CommitPosition);
+    public static GlobalEventLogPosition ToGlobalEventLogPosition(this Position position) => new(position.CommitPosition);
 
     public static FromAll ToAllPosition(this GlobalEventLogPosition globalEventLogPosition) => FromAll.After(new Position(globalEventLogPosition.Value, globalEventLogPosition.Value));
 

@@ -10,10 +10,7 @@ internal sealed class ExceptionalKurrentClientWrapper(IKurrentClient passthrough
 {
     readonly ConcurrentDictionary<string, Exception> dictionaryExceptionToThrowOnceForTesting = new();
 
-    internal void AddExceptionToThrowOnceForTesting(string streamName, Exception exception)
-    {
-        dictionaryExceptionToThrowOnceForTesting.AddOrUpdate(streamName, exception, (k, v) => v = exception);
-    }
+    internal void AddExceptionToThrowOnceForTesting(string streamName, Exception exception) => dictionaryExceptionToThrowOnceForTesting.AddOrUpdate(streamName, exception, (k, v) => v = exception);
 
     private void ThrowIfException(string streamName)
     {
@@ -36,15 +33,9 @@ internal sealed class ExceptionalKurrentClientWrapper(IKurrentClient passthrough
         return passthrough.DeleteStreamAsync(streamName, expectedRevision, token);
     }
 
-    public void Dispose()
-    {
-        passthrough.Dispose();
-    }
+    public void Dispose() => passthrough.Dispose();
 
-    public ValueTask DisposeAsync()
-    {
-        return passthrough.DisposeAsync();
-    }
+    public ValueTask DisposeAsync() => passthrough.DisposeAsync();
 
     public Task<StreamMetadataResult> GetStreamMetadata(string streamName, CancellationToken token)
     {

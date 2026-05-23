@@ -15,16 +15,13 @@ namespace Orleans.EventSourcing.Kurrent.Storage;
 /// <summary>
 ///     Kurrent-based log consistent event serializer
 /// </summary>
-public sealed class EventEnvelopeSerializer<TEvent> : IEventSerializer<EventEnvelope<TEvent>>
+ internal sealed class EventEnvelopeSerializer<TEvent> : IEventSerializer<EventEnvelope<TEvent>>
     where TEvent : class
 {
     private readonly IGrainStorageSerializer _storageSerializer;
     private readonly TypeConverter _typeConverter;
     private readonly Type eventType = typeof(TEvent);
 
-    /// <summary>
-    ///     Creates a new instance of the <see cref="EnvelopeEventSerializer" /> type.
-    /// </summary>
     public EventEnvelopeSerializer(KurrentStorageOptions storageOptions, TypeConverter typeConverter)
     {
         ArgumentNullException.ThrowIfNull(storageOptions, nameof(storageOptions));
