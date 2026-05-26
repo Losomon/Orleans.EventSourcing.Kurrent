@@ -21,6 +21,8 @@ namespace Orleans.EventSourcing.Kurrent.Tests;
 
 public sealed class BasicTests : IAsyncLifetime
 {
+    private const int IntegrationTestTimeout = 30_000;
+
     static readonly KurrentDBClientSettings clientSettings = KurrentDBClientSettings.Create("esdb://localhost:2113?tls=false");
 
     private InProcessTestCluster cluster = null!;
@@ -60,7 +62,7 @@ public sealed class BasicTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task DepositWithdraw()
     {
         var account = cluster.Client.GetGrain<IAccountGrain>(Guid.NewGuid());
@@ -83,7 +85,7 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.Equal(5, withdrawn.Amount);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task CheckEventsNumbering()
     {
         // GetEvents calls internally RetrieveConfirmedEvents(0, ConfirmedVersion);
@@ -120,7 +122,7 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.Equal(5, Assert.IsType<AccountEvent.Withdrawn>(await account.GetEventAtVersion(2)).Amount);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task EventIdPropagation()
     {
         var eventId = Guid.NewGuid();
@@ -133,7 +135,7 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.Equal(eventId, deposited.EventId);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task CheckVersionMismatch()
     {
         var accountGrainId = Guid.NewGuid();
@@ -163,7 +165,7 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.Equal(22, Assert.IsType<AccountEvent.Deposited>(events[2]).Amount);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task CheckHandleTruncation()
     {
         var kurrentClient = cluster.Silos.First().ServiceProvider.GetRequiredKeyedService<IKurrentClient>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
@@ -235,7 +237,7 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.IsType<StreamDeletedException>(ex3.InnerException);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task StateGrainCRUD()
     {
         var stateGrain = cluster.Client.GetGrain<IStateGrain>(Guid.NewGuid());
@@ -277,14 +279,14 @@ public sealed class BasicTests : IAsyncLifetime
         await stateGrain.ClearValue();
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task TestDeleteOnNonExistantState()
     {
         var stateGrain = cluster.Client.GetGrain<IStateGrain>(Guid.NewGuid());
         await stateGrain.ClearValue();
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task StateGrainWriteETagTest()
     {
         var stateGrain = cluster.Client.GetGrain<IStateGrain>(Guid.NewGuid());
@@ -296,7 +298,7 @@ public sealed class BasicTests : IAsyncLifetime
         await Assert.ThrowsAsync<InconsistentStateException>(() => stateGrain.SetValue(356));
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task StateGrainClearETagTest()
     {
         var stateGrain = cluster.Client.GetGrain<IStateGrain>(Guid.NewGuid());
@@ -308,28 +310,28 @@ public sealed class BasicTests : IAsyncLifetime
         await Assert.ThrowsAsync<InconsistentStateException>(() => stateGrain.ClearValue());
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ProjectionAbstractBaseType()
     {
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
         await Assert.ThrowsAsync<NotSupportedException>(() => grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(AccountEvent)], TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken).AsTask());
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ProjectionNoTypes()
     {
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
         await Assert.ThrowsAsync<ArgumentException>(() => grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [], TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken).AsTask());
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ProjectionCannotCastToBaseEvent()
     {
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
         await Assert.ThrowsAsync<ArgumentException>(() => grainProjectionProvider.SubscribeToGrainEvents<string>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, [typeof(object)], TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken).AsTask());
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ProjectionAggregation()
     {
         Guid[] idsForThisTest = [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()];
@@ -381,7 +383,7 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.Equal(5, average);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ProjectionSubscribeReturnsEventsInOrder()
     {
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
@@ -412,7 +414,7 @@ public sealed class BasicTests : IAsyncLifetime
 
 
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ProjectionSubscribeNotificationReturnsEventsInOrder()
     {
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
@@ -442,7 +444,7 @@ public sealed class BasicTests : IAsyncLifetime
     }
 
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ProjectionEventNumbersMatchGrainVersionNumbers()
     {
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
@@ -468,7 +470,7 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.Equal(1, receivedEventVersions[0]);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ProjectionSubscribeSkipsUnrelatedEvents()
     {
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
@@ -496,7 +498,7 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.Equal(123, Assert.IsType<AccountEvent.Deposited>(receivedEvents[0]).Amount);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ProjectionThrowsOnNullTypeArray()
     {
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
@@ -504,7 +506,7 @@ public sealed class BasicTests : IAsyncLifetime
             grainProjectionProvider.SubscribeToGrainEvents<object>(GrainId.Parse($"Test/{Guid.NewGuid()}"), GlobalEventLogPosition.Start, null!, TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken).AsTask());
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ProjectionThrowsOnDefaultSubscriber()
     {
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
@@ -512,7 +514,7 @@ public sealed class BasicTests : IAsyncLifetime
             grainProjectionProvider.SubscribeToGrainEvents<object>(default, GlobalEventLogPosition.Start, [typeof(AccountEvent.Deposited)], TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken).AsTask());
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ProjectionCaughtUp()
     {
         var grainProjectionProvider = cluster.GetSiloServiceProvider().GetRequiredKeyedService<IGrainEventProvider>(ProviderConstants.DEFAULT_LOG_CONSISTENCY_PROVIDER_NAME);
@@ -526,7 +528,7 @@ public sealed class BasicTests : IAsyncLifetime
         }
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ClearLog_OnEmptyStream_IsNoOp()
     {
         var account = cluster.Client.GetGrain<IAccountGrain>(Guid.NewGuid());
@@ -538,7 +540,7 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.Empty(await account.GetEvents());
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ClearLog_AfterAppends_ResetsViewsAndAllowsReAppend()
     {
         var account = cluster.Client.GetGrain<IAccountGrain>(Guid.NewGuid());
@@ -561,7 +563,7 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.Single(await account.GetEvents());
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ClearLog_PersistsAcrossDeactivation()
     {
         var accountId = Guid.NewGuid();
@@ -577,7 +579,7 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.Empty(await account.GetEvents());
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = IntegrationTestTimeout)]
     public async Task ClearLog_PropagatesKurrentExceptions()
     {
         var account = cluster.Client.GetGrain<IAccountGrain>(Guid.NewGuid());
