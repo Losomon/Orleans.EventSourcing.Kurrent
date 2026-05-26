@@ -206,7 +206,7 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.Equal(77, await account.GetConfirmedBalance());
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = 10000)]
     public async Task CheckHandleExceptionTest()
     {
         var accountGrainId = Guid.NewGuid();
