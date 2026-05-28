@@ -41,11 +41,21 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-
+            
+      - name: NuGet login (OIDC → temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{secrets.NUGET_USER}}
+    
       - name: Push to NuGet.org (trusted publishing)
         run: |
           dotnet nuget push "packages/*.nupkg" \
-            --api-key az \
+            --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+          dotnet nuget push "packages/*.snupkg" \
+            --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
 
