@@ -1,8 +1,12 @@
 name: Publish to NuGet
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: GitHub release tag to publish from
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -24,11 +28,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p packages
-          gh release download "${{ github.event.release.tag_name }}" \
+          gh release download "${{ inputs.tag }}" \
             --repo "${{ github.repository }}" \
             --pattern "*.nupkg" \
             --dir packages
-          gh release download "${{ github.event.release.tag_name }}" \
+          gh release download "${{ inputs.tag }}" \
             --repo "${{ github.repository }}" \
             --pattern "*.snupkg" \
             --dir packages
@@ -44,3 +48,4 @@ jobs:
             --api-key az \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
+
