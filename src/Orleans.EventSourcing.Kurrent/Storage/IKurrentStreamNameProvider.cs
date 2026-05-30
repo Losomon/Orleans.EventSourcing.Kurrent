@@ -25,7 +25,7 @@ public interface IKurrentStreamNameProvider
     /// <summary>
     ///     Parses a stream name back into a <see cref="GrainId"/>.
     /// </summary>
-    /// <exception cref="NotSupportedException">Thrown if <paramref name="streamName"/> cannot be parsed.</exception>
+    /// <exception cref="ArgumentException">Thrown if <paramref name="streamName"/> cannot be parsed.</exception>
     GrainId GetGrainId(string streamName);
 
     /// <summary>

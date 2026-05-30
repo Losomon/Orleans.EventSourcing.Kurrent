@@ -45,7 +45,8 @@ public record Checkpoint(GlobalEventLogPosition Position) : EventStreamUpdate;
 /// <param name="Position"></param>
 /// <param name="EventGrainId"></param>
 /// <param name="EventGrainVersion"></param>
-public record GrainEventNotification(GlobalEventLogPosition Position, GrainId EventGrainId, int EventGrainVersion)
+/// <param name="EventId">The unique identifier of the event.</param>
+public record GrainEventNotification(GlobalEventLogPosition Position, GrainId EventGrainId, int EventGrainVersion, Guid EventId)
     : Checkpoint(Position);
 
 
@@ -59,8 +60,12 @@ public record GrainEventNotification(GlobalEventLogPosition Position, GrainId Ev
 /// <param name="Event">The event payload emitted by the grain.</param>
 /// <param name="EventGrainId">The unique identifier of the grain that produced the event.</param>
 /// <param name="EventGrainVersion">The version of the grain at the time the event was generated.</param>
+/// <param name="EventId">The unique identifier of the event.</param>
+/// <param name="Metadata">Additional metadata associated with the event.</param>
 public sealed record GrainEvent<TEventBase>(
     GlobalEventLogPosition Position,
     TEventBase Event,
     GrainId EventGrainId,
-    int EventGrainVersion) : GrainEventNotification(Position, EventGrainId, EventGrainVersion);
+    int EventGrainVersion,
+    Guid EventId,
+    IReadOnlyDictionary<string, string> Metadata) : GrainEventNotification(Position, EventGrainId, EventGrainVersion, EventId);

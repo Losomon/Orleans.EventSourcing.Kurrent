@@ -22,7 +22,7 @@ public interface IGrainEventProvider // If we want non-grain events, we should h
     /// <param name="eventFilter">An array of event types to filter the subscription.</param>
     /// <param name="cancellationToken">A token to cancel the subscription.</param>
     /// <returns>An asynchronous stream of <see cref="GrainEvent{TEventBase}"/>, <see cref="CaughtUp"/>, <see cref="FallenBehind"/> or <see cref="Checkpoint"/> objects.</returns>
-    IAsyncEnumerable<EventStreamUpdate> SubscribeToGrainEvents<TEventBase>(GrainId subscriber, GlobalEventLogPosition startingPosition, Type[] eventFilter, CancellationToken cancellationToken) where TEventBase : notnull;
+    IAsyncEnumerable<EventStreamUpdate> SubscribeToGrainEvents<TEventBase>(GrainId subscriber, GlobalEventLogPosition startingPosition, Type[] eventFilter, CancellationToken cancellationToken) where TEventBase : class;
 
 
     /// <summary>
@@ -55,5 +55,5 @@ public interface IGrainEventProvider // If we want non-grain events, we should h
     /// <param name="startingPosition">The position in the event stream to start from.</param>
     /// <param name="cancellationToken">A token to cancel the subscription.</param>
     /// <returns>An asynchronous stream of <see cref="GrainEvent{TEventBase}"/>, <see cref="CaughtUp"/>, <see cref="FallenBehind"/> or <see cref="Checkpoint"/> objects.</returns>
-    IAsyncEnumerable<EventStreamUpdate> SubscribeToGrainEvents<TGrain, TEventBase>(GrainId subscriber, GlobalEventLogPosition startingPosition, CancellationToken cancellationToken) where TGrain : IGrain where TEventBase : notnull;
+    IAsyncEnumerable<EventStreamUpdate> SubscribeToGrainEvents<TGrain, TEventBase>(GrainId subscriber, GlobalEventLogPosition startingPosition, CancellationToken cancellationToken) where TGrain : IGrain where TEventBase : class;
 }
