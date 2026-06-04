@@ -1,4 +1,5 @@
 using Orleans.EventSourcing;
+using Orleans.EventSourcing.Kurrent;
 
 namespace Orleans.EventSourcing.Kurrent.Tests.Grains
 {
@@ -11,6 +12,10 @@ namespace Orleans.EventSourcing.Kurrent.Tests.Grains
         [GenerateSerializer]
         [Alias("Orleans.EventSourcing.Kurrent.Tests.Grains.AccountEvent.Closed")]
         public sealed record Closed() : AccountEvent;
+        [GenerateSerializer]
+        [Alias("Orleans.EventSourcing.Kurrent.Tests.Grains.AccountEvent.Truncation")]
+        [DiscardPriorEvents]
+        public sealed record Truncation(decimal Balance) : AccountEvent;
         [GenerateSerializer]
         [Alias("Orleans.EventSourcing.Kurrent.Tests.Grains.AccountEvent.Deposited")]
         public sealed record Deposited(decimal Amount) : AccountEvent;
@@ -40,6 +45,11 @@ namespace Orleans.EventSourcing.Kurrent.Tests.Grains
 
         }
 
+        public void Apply(AccountEvent.Truncation truncation)
+        {
+            Balance = truncation.Balance;
+        }
+
         [Id(0)]
         public decimal Balance { get; set; }
     }
@@ -55,6 +65,10 @@ namespace Orleans.EventSourcing.Kurrent.Tests.Grains
         Task Deposit(decimal amount, Guid eventId);
         [Alias("DepositWithoutConfirm")]
         ValueTask DepositWithoutConfirm(decimal amount);
+        [Alias("TruncateAccountWithoutConfirm")]
+        ValueTask TruncateAccountWithoutConfirm();
+        [Alias("ConfirmPendingEvents")]
+        Task ConfirmPendingEvents();
         [Alias("GetConfirmedBalance")]
         ValueTask<decimal> GetConfirmedBalance();
         [Alias("GetTentativeBalance")]
@@ -71,6 +85,8 @@ namespace Orleans.EventSourcing.Kurrent.Tests.Grains
         Task<int> GetConfirmedVersion();
         [Alias("ClearLog")]
         Task ClearLog();
+        [Alias("TruncateAccount")]
+        Task TruncateAccount();
     }
 
     internal class AccountGrain : JournaledGrain<AccountState, AccountEvent>, IAccountGrain
@@ -101,6 +117,14 @@ namespace Orleans.EventSourcing.Kurrent.Tests.Grains
             return ValueTask.CompletedTask;
         }
 
+        public ValueTask TruncateAccountWithoutConfirm()
+        {
+            RaiseEvent(new AccountEvent.Truncation(State.Balance));
+            return ValueTask.CompletedTask;
+        }
+
+        public Task ConfirmPendingEvents() => ConfirmEvents();
+
         public ValueTask<decimal> GetConfirmedBalance() => ValueTask.FromResult(State.Balance);
 
         public ValueTask<decimal> GetTentativeBalance() => ValueTask.FromResult(TentativeState.Balance);
@@ -127,5 +151,11 @@ namespace Orleans.EventSourcing.Kurrent.Tests.Grains
         }
 
         public Task ClearLog() => base.ClearLogAsync(CancellationToken.None);
+
+        public async Task TruncateAccount()
+        {
+            RaiseEvent(new AccountEvent.Truncation(State.Balance));
+            await ConfirmEvents();
+        }
     }
 }

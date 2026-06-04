@@ -592,4 +592,115 @@ public sealed class BasicTests : IAsyncLifetime
         var ex = await Assert.ThrowsAsync<InconsistentStateException>(() => account.ClearLog());
         Assert.IsType<TimeoutException>(ex.InnerException);
     }
+
+    [Fact(Timeout = IntegrationTestTimeout)]
+    public async Task TruncateAccount_HidesEventsPriorToMarker()
+    {
+        var accountId = Guid.NewGuid();
+        var account = cluster.Client.GetGrain<IAccountGrain>(accountId);
+
+        await account.Deposit(10);
+        await account.Deposit(20);
+        await account.TruncateAccount();   // truncation marker – events 0 and 1 should become hidden on reload
+        await account.Deposit(5);
+
+        // Deactivate so the grain reloads state from storage (respecting $tb).
+        await account.AsReference<IGrainManagementExtension>().DeactivateOnIdle();
+
+        // After reload only the post-truncation events should contribute to the balance.
+        Assert.Equal(35, await account.GetConfirmedBalance());
+
+        // Only the events from the truncation marker onwards should be visible.
+        var events = await account.GetEvents();
+        Assert.Equal(2, events.Count); // Truncation + Deposited(5)
+        Assert.IsType<AccountEvent.Truncation>(events[0]);
+        Assert.IsType<AccountEvent.Deposited>(events[1]);
+    }
+
+    [Fact(Timeout = IntegrationTestTimeout)]
+    public async Task TruncateAccount_ResetsTentativeAndConfirmedViewsAroundPersistence()
+    {
+        var accountId = Guid.NewGuid();
+        var account = cluster.Client.GetGrain<IAccountGrain>(accountId);
+
+        await account.Deposit(100);
+        await account.DepositWithoutConfirm(25);
+        await account.TruncateAccountWithoutConfirm();
+
+        Assert.Equal(125, await account.GetTentativeBalance());
+
+        await account.DepositWithoutConfirm(42);
+
+        Assert.Equal(167, await account.GetTentativeBalance());
+
+        await account.ConfirmPendingEvents();
+
+        Assert.Equal(167, await account.GetConfirmedBalance());
+        Assert.Equal(167, await account.GetTentativeBalance());
+
+        var events = await account.GetEvents();
+        Assert.Equal(2, events.Count);
+        Assert.IsType<AccountEvent.Truncation>(events[0]);
+        Assert.Equal(42, Assert.IsType<AccountEvent.Deposited>(events[1]).Amount);
+    }
+
+    [Fact(Timeout = IntegrationTestTimeout)]
+    public async Task TruncateAccount_ViewRebuiltCorrectlyAfterDeactivation()
+    {
+        var accountId = Guid.NewGuid();
+        var account = cluster.Client.GetGrain<IAccountGrain>(accountId);
+
+        await account.Deposit(100);
+        await account.TruncateAccount();
+        await account.Deposit(42);
+
+        // Deactivate so the grain reloads from storage
+        await account.AsReference<IGrainManagementExtension>().DeactivateOnIdle();
+
+        Assert.Equal(142, await account.GetConfirmedBalance());
+    }
+
+    [Fact(Timeout = IntegrationTestTimeout)]
+    public async Task TruncateAccount_OnFirstEventTruncatesEntireHistory()
+    {
+        var accountId = Guid.NewGuid();
+        var account = cluster.Client.GetGrain<IAccountGrain>(accountId);
+
+        await account.Deposit(50);
+        await account.Deposit(50);
+
+        // Raise truncation as the sole event in a batch.
+        await account.TruncateAccount();
+
+        // Deactivate so the grain reloads from storage with $tb applied.
+        await account.AsReference<IGrainManagementExtension>().DeactivateOnIdle();
+
+        Assert.Equal(100, await account.GetConfirmedBalance());
+        Assert.Single(await account.GetEvents()); // only the Truncation event
+    }
+
+    [Fact(Timeout = IntegrationTestTimeout)]
+    public async Task TruncateAccount_LoadHealsUnsetTruncationMetadata()
+    {
+        // Simulates a crash between the ConditionalAppendToStreamAsync and SetStreamMetadata calls:
+        // the truncation marker event is persisted but $tb is never written. The next Load should
+        // detect the marker, reconstruct the correct view, and idempotently re-apply $tb.
+        var accountId = Guid.NewGuid();
+        var account = cluster.Client.GetGrain<IAccountGrain>(accountId);
+        var streamName = streamNameProvider.GetStreamName(account.GetGrainId());
+
+        await account.Deposit(100);
+        await account.Deposit(50);
+
+        // Make the SetStreamMetadata call throw so the truncation marker is written but $tb is not set.
+        kurrentClient.AddSetMetadataExceptionToThrowOnceForTesting(streamName, new Exception("simulated crash after append"));
+        await Assert.ThrowsAsync<InconsistentStateException>(() => account.TruncateAccount());
+
+
+        // After self-healing only the Truncation event should contribute to the view (balance = 0).
+        Assert.Equal(150, await account.GetConfirmedBalance());
+        var events = await account.GetEvents();
+        Assert.Single(events);
+        Assert.IsType<AccountEvent.Truncation>(events[0]);
+    }
 }

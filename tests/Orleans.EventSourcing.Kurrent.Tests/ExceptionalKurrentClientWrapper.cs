@@ -9,8 +9,11 @@ namespace Orleans.EventSourcing.Kurrent.Tests;
 internal sealed class ExceptionalKurrentClientWrapper(IKurrentClient passthrough) : IKurrentClient
 {
     readonly ConcurrentDictionary<string, Exception> dictionaryExceptionToThrowOnceForTesting = new();
+    readonly ConcurrentDictionary<string, Exception> setMetadataExceptionToThrowOnce = new();
 
     internal void AddExceptionToThrowOnceForTesting(string streamName, Exception exception) => dictionaryExceptionToThrowOnceForTesting.AddOrUpdate(streamName, exception, (k, v) => v = exception);
+
+    internal void AddSetMetadataExceptionToThrowOnceForTesting(string streamName, Exception exception) => setMetadataExceptionToThrowOnce.AddOrUpdate(streamName, exception, (k, v) => v = exception);
 
     private void ThrowIfException(string streamName)
     {
@@ -52,6 +55,10 @@ internal sealed class ExceptionalKurrentClientWrapper(IKurrentClient passthrough
     public Task<IWriteResult> SetStreamMetadata(string streamName, StreamState expectedRevision, StreamMetadata streamMetadata, CancellationToken token)
     {
         ThrowIfException(streamName);
+        if (setMetadataExceptionToThrowOnce.Remove(streamName, out var metaEx))
+        {
+            throw metaEx;
+        }
         return passthrough.SetStreamMetadata(streamName, expectedRevision, streamMetadata, token);
     }
 

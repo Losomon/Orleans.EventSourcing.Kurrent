@@ -1,14 +1,11 @@
+using KurrentDB.Client;
+using Orleans.EventSourcing.Kurrent.Configuration;
+using Orleans.EventSourcing.Kurrent.Observability;
+ 
+using Orleans.Storage;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-
-using KurrentDB.Client;
-
-using Orleans.EventSourcing;
-using Orleans.Storage;
-
-using Orleans.EventSourcing.Kurrent.Configuration;
-using Orleans.EventSourcing.Kurrent.Observability;
 
 namespace Orleans.EventSourcing.Kurrent.Storage;
 
@@ -25,7 +22,7 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
     readonly TagList observabilityTags;
     bool disposed;
 
-    public KurrentLogViewAdapter(ILogViewAdaptorHost<TLogView, TLogEntry> host, IKurrentClient client, IEventSerializer<TLogEntry> eventConverter, KurrentStorageOptions options, ILogConsistencyProtocolServices services, IKurrentStreamNameProvider streamNameProvider)
+    public KurrentLogViewAdapter(ILogViewAdaptorHost<TLogView, TLogEntry> host, IKurrentClient client, IEventSerializer<TLogEntry> eventConverter, ILogConsistencyProtocolServices services, IKurrentStreamNameProvider streamNameProvider)
     {
         this.streamName = streamNameProvider.GetStreamName(services.GrainId);
         this.client = client;
@@ -114,7 +111,7 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
 
         var maxCount = toVersion - fromVersion + 1; // inclusive range
 
-        return await ReadAsync(fromVersion.ToStreamPosition(), maxCount, CancellationToken.None).Select(x => x.Log).ToListAsync().ConfigureAwait(true);
+        return await ReadAsync(fromVersion.ToStreamPosition(), maxCount, CancellationToken.None).Select(x => x.Log).ToListAsync().ConfigureAwait(true); // StreamPosition not needed here
     }
 
     public void Submit(TLogEntry entry)
@@ -138,7 +135,7 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
 
     private async Task<bool> StartWorker(CancellationToken token)
     {
-        // This task is observed by all async operations completions, so if it fails there operations 
+        // This task is observed by all async operations completions, so if it fails their operations 
         // will fail too.
         bool failedLazyWrites = false;
 
@@ -161,16 +158,30 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
                         var newConfirmedView = new TLogView();
                         var newTentativeView = new TLogView();
                         ConfirmedVersion = 0;
+                        bool firstEventInStream = true;
+                        StreamPosition? pendingTruncationPosition = null;
 
                         await foreach (var logEntry in ReadAsync(StreamPosition.Start, int.MaxValue, token).ConfigureAwait(true))
                         {
+                            if (IsDeletePriorEventsMarker(logEntry.Log) && !firstEventInStream)
+                            {
+                                newConfirmedView = new TLogView();
+                                newTentativeView = new TLogView();
+
+                                pendingTruncationPosition = logEntry.StreamPosition;
+                            }
+
                             host.UpdateView(newConfirmedView, logEntry.Log);
                             host.UpdateView(newTentativeView, logEntry.Log);
                             ConfirmedVersion = logEntry.Version;
+                            firstEventInStream = false;
                         }
 
-                        // reset confirmed and tentative views
-                        // keeps things consistent in a truncated stream scenario
+                        if (pendingTruncationPosition is { } truncPos)
+                        {
+                            await DeleteBefore(truncPos, token).ConfigureAwait(true);
+                        }
+
                         ConfirmedView = newConfirmedView;
                         TentativeView = newTentativeView;
 
@@ -202,6 +213,15 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
                         {
                             foreach (var logEntry in entries)
                             {
+                                if (IsDeletePriorEventsMarker(logEntry))
+                                {
+                                    ConfirmedView = new TLogView();
+                                    var truncatePosition = StreamPosition.FromInt64(ConfirmedVersion);
+
+                                    await DeleteBefore(truncatePosition, token).ConfigureAwait(true);                                
+                                }
+             
+
                                 host.UpdateView(ConfirmedView, logEntry);
                                 ConfirmedVersion++;
                             }
@@ -268,6 +288,28 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
         }
     }
 
+    private static bool IsDeletePriorEventsMarker(TLogEntry entry)
+        => entry?.GetType().IsDefined(typeof(DiscardPriorEventsAttribute), inherit: true) == true;
+
+    private async Task DeleteBefore(StreamPosition truncateBefore, CancellationToken cancellationToken)
+    {
+        var streamMetadataResult = await client.GetStreamMetadata(streamName, cancellationToken).ConfigureAwait(true);
+
+        if (streamMetadataResult.Metadata.TruncateBefore != truncateBefore)
+        {
+            await client.SetStreamMetadata(streamName,
+                                           streamMetadataResult.MetastreamRevision.HasValue ? StreamState.StreamRevision(streamMetadataResult.MetastreamRevision.Value) : StreamState.NoStream,
+                                           new StreamMetadata(
+                                               streamMetadataResult.Metadata.MaxCount,
+                                               streamMetadataResult.Metadata.MaxAge,
+                                               truncateBefore: truncateBefore,
+                                               streamMetadataResult.Metadata.CacheControl,
+                                               streamMetadataResult.Metadata.Acl,
+                                               streamMetadataResult.Metadata.CustomMetadata),
+                                           cancellationToken).ConfigureAwait(true);
+        }
+    }
+
     private EventData[] Serialize(TLogEntry[] entries)
     {
         EventData[] serializedEntries = new EventData[entries.Length];
@@ -306,13 +348,13 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
         return eventEntry;
     }
 
-    private async IAsyncEnumerable<(TLogEntry Log, int Version)> ReadAsync(StreamPosition fromPosition, long maxCount, [EnumeratorCancellation] CancellationToken token)
+    private async IAsyncEnumerable<(TLogEntry Log, int Version, StreamPosition StreamPosition)> ReadAsync(StreamPosition fromPosition, long maxCount, [EnumeratorCancellation] CancellationToken token)
     {
         var readResult = client.ReadStreamAsync(Direction.Forwards, streamName, fromPosition, maxCount, false, token);
 
         await foreach (var logEntry in readResult.ConfigureAwait(true))
         {
-            yield return (Deserialize(logEntry), logEntry.OriginalEventNumber.ToVersion());
+            yield return (Deserialize(logEntry), logEntry.OriginalEventNumber.ToVersion(), logEntry.OriginalEventNumber);
         }
     }
 
@@ -357,6 +399,11 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
     {
         foreach (var entry in entries)
         {
+            if (IsDeletePriorEventsMarker(entry))
+            {
+                TentativeView = new TLogView();
+            }
+
             host.UpdateView(TentativeView, entry);
             pendingSuffix.Enqueue(entry);
         }
@@ -366,6 +413,11 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
 
     private void Append(TLogEntry entry)
     {
+        if (IsDeletePriorEventsMarker(entry))
+        {
+            TentativeView = new TLogView();
+        }
+
         host.UpdateView(TentativeView, entry);
         pendingSuffix.Enqueue(entry);
 

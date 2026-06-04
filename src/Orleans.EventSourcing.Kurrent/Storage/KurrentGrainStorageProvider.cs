@@ -129,7 +129,13 @@ internal sealed class KurrentGrainStorageProvider(IKurrentClient kurrentClient, 
         {
             await kurrentClient.SetStreamMetadata(streamName,
                                                   metadata.MetastreamRevision.HasValue ? StreamState.StreamRevision(metadata.MetastreamRevision.Value) : StreamState.NoStream,
-                                                  new StreamMetadata(maxCount: 1),
+                                                  new StreamMetadata(
+                                                        1,
+                                                        metadata.Metadata.MaxAge,
+                                                        metadata.Metadata.TruncateBefore,
+                                                        metadata.Metadata.CacheControl,
+                                                        metadata.Metadata.Acl,
+                                                        metadata.Metadata.CustomMetadata),
                                                   token).ConfigureAwait(false);
         }
     }
