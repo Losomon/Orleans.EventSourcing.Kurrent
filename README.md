@@ -2,12 +2,12 @@
 
 [![NuGet](https://img.shields.io/nuget/v/Orleans.EventSourcing.Kurrent.svg)](https://www.nuget.org/packages/Orleans.EventSourcing.Kurrent)
 
-Two independent [Microsoft Orleans](https://learn.microsoft.com/dotnet/orleans/) providers backed by [KurrentDB](https://kurrent.io/) (formerly EventStoreDB), plus a cluster-wide event subscription API for projections:
+ [Microsoft Orleans](https://learn.microsoft.com/dotnet/orleans/) providers backed by [KurrentDB](https://kurrent.io/) (formerly EventStoreDB)
 
 | Provider | Orleans interface | What it persists | When to use |
 | --- | --- | --- | --- |
 | **Log-consistency provider** (`AddKurrentBasedLogConsistencyProvider*`) | `ILogViewAdaptorFactory` for `JournaledGrain<TView, TEntry>` | The full **event log** for the grain — every `RaiseEvent` is appended to the grain's Kurrent stream. The view is rebuilt by replaying events. | Event-sourced grains (`JournaledGrain`). Gives you full history, projections via `IGrainEventProvider`, and replay. |
-| **Grain state storage provider** (`AddKurrentBasedGrainStorageProvider*`) | `IGrainStorage` for `Grain<TState>` / `[PersistentState]` | The **latest snapshot** only — each `WriteStateAsync` appends one event and Kurrent's `MaxCount = 1` stream metadata trims older revisions. | Regular Orleans state persistence when you want it backed by Kurrent (e.g. to keep all storage in one system) but you do **not** need the event history. |
+| **Grain state storage provider** (`AddKurrentBasedGrainStorageProvider*`) | `IGrainStorage` for `Grain<TState>` / `[PersistentState]` | The **latest snapshot** only — each `WriteStateAsync` appends one event and Kurrent's `MaxCount = 1` stream metadata trims older revisions. | Regular Orleans state persistence when you want it backed by Kurrent (e.g. to keep all storage in one system) |
 | **Grain event subscription** (`IGrainEventProvider`) ⚠ experimental | n/a | Read-side subscription to the Kurrent `$all` stream, filtered to the streams produced by the log-consistency provider. | Projections / read models built from grain events emitted via the log-consistency provider. |
 
 The two providers are independent: register either, both, or neither. They share `KurrentStorageOptions` (per provider name) so the underlying `KurrentClient` and stream naming can be configured the same way.
@@ -89,7 +89,7 @@ await foreach (var update in eventProvider.SubscribeToGrainEvents<IAccountGrain,
 
 `IGrainEventProvider` only sees streams produced by the **log-consistency** provider. The state-storage provider's snapshot writes are not surfaced through this API.
 
-## Using the grain state storage provider (snapshots)
+## Using the grain state storage provider
 
 Use as a regular Orleans `IGrainStorage` — for example via `[PersistentState]`. Each `WriteStateAsync` appends one event to the grain's stream and Kurrent retains only the latest revision (stream metadata `MaxCount = 1`):
 
@@ -167,12 +167,26 @@ public sealed record Deposited(decimal Amount);
 
 If you need a different encoding (e.g., a versioned namespace scheme, JSON envelope with a discriminator, or interop with a non-Orleans producer), implement `IEventSerializer<TLogEntry>` and register it via DI before the provider, or supply your own through `KurrentStorageOptions`.
 
+
+## Accessing EventId and Event Metadata
+
+If you need access to Kurrent's `EventId` or metadata fields in your grain, wrap your `TLogEvent` using `EventEnvelope<TLogEvent>` as your TLogEvent argument for JournaledGrain or IGrainEventProvider.
+
+e.g. `IGrainEventProvider.SubscribeToGrainEvents<EventEnvelope<T>>` and `JournaledGrain<TLogView, EventEnvelope<TLogEvent>>`.
+
+You can mix-and-match `EventEnvelope<T>` with `T` as needed within the same silo, as the serializer will handle both cases.
+
+When you use `EventEnvelope<T>` a different `IEventConverter` is used which reads and writes the properites of the `EventEnvelope` into the appropriate Kurrent fields.
+
+* EventId property, which you can set if you want control over the eventId written to KurrentDB, or read from the event when replaying.
+* Metadata dictionary, which is persisted to KurrentDB and can be used to store additional information about the event that doesn't fit into the event payload. This can be useful for things like correlation ids, causation ids, or any other contextual information you want to associate with the event.
+
 ## Notes & limitations
 
 - The two providers are independent. Registering the state storage provider does **not** give you `JournaledGrain` support, and vice versa.
 - The state storage provider keeps only the latest snapshot (`MaxCount = 1`) — do not use it for grains where you need event history.
 - The state storage provider's `ClearStateAsync` performs a Kurrent soft-delete; it does not write a tombstone event.
-- The default stream-name format uses `-` as the grain-type separator and `|` between `stateName` and grain key. A custom `IKurrentStreamNameProvider` is required if those characters appear in your grain types or state names.
+- The default stream-name format uses `-` as the grain-type separator and `|` between `stateName` and grain key.
 - `IGrainEventProvider` subscriptions only observe streams written by the log-consistency provider; state-storage snapshot writes are not exposed.
 
 ## Versioning
@@ -181,11 +195,12 @@ Package versions are derived from git tags (`vMAJOR.MINOR.PATCH[-prerelease]`) u
 
 ## Experimental APIs
 
-Some surface is annotated with `[Experimental("OEK…")]` and will produce a compiler diagnostic at every call site. The shape of these APIs may change in non-major releases. Acknowledge by suppressing the relevant diagnostic ID in your project (`<NoWarn>$(NoWarn);OEK0001</NoWarn>`) or with a localized `#pragma warning disable`.
+Some surface is annotated with `[Experimental("OEK…")]` and will produce a compiler diagnostic at every call site. The shape of these APIs may change in non-major releases. Acknowledge by suppressing the relevant diagnostic ID in your project (`<NoWarn>$(NoWarn);OEK0001;OEK0002</NoWarn>`) or with a localized `#pragma warning disable`.
 
-| Diagnostic | API |
-| --- | --- |
-| `OEK0001` | `IGrainEventProvider` and the projection subscription model (`EventStreamUpdate`, `GlobalEventLogPosition`). |
+| Diagnostic | API | Purpose |
+| --- | --- | --- |
+| `OEK0001` | `IGrainEventProvider` | An interface available via dependency-injection to for grains hosting projections or side-effects to read grain events |
+| `OEK0002` | `DiscardPriorEventsAttribute`  | An attribute to tell the storage provider to delete events prior to this event |
 
 ## License
 

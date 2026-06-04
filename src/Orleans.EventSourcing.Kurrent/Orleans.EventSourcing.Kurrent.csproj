@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <PackageId>Orleans.EventSourcing.Kurrent</PackageId>
     <Authors>William Gunaratne</Authors>
@@ -8,8 +8,7 @@
     <AnalysisLevel>latest-all</AnalysisLevel>
 	<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- The package's own implementation of IGrainEventProvider intentionally consumes the experimental API. -->
-    <NoWarn>$(NoWarn);OEK0001</NoWarn>
+    <NoWarn>$(NoWarn);OEK0001;OEK0002</NoWarn>
   </PropertyGroup>	
   <ItemGroup>
     <InternalsVisibleTo Include="Orleans.EventSourcing.Kurrent.Tests" />

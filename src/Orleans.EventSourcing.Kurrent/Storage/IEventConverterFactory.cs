@@ -3,7 +3,7 @@ namespace Orleans.EventSourcing.Kurrent.Storage;
 /// <summary>
 /// Provides a factory for creating event serializers.
 /// </summary>
-public interface IEventSerializerFactory
+public interface IEventConverterFactory
 {
 
     /// <summary>
@@ -11,5 +11,5 @@ public interface IEventSerializerFactory
     /// </summary>
     /// <typeparam name="TLogView">The type of the log view.</typeparam>
     /// <returns>An event serializer for the specified log view type.</returns>
-    public IEventSerializer<TLogView> GetEventSerializer<TLogView>();
+    public IEventConverter<TLogView> GetEventConverter<TLogView>();
 }

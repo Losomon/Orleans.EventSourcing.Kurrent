@@ -6,7 +6,7 @@ namespace Orleans.EventSourcing.Kurrent.Storage;
 /// An interface for converting between <typeparamref name="TLogEntry"/>, <see cref="EventData"/> and <see cref="ResolvedEvent"/>.
 /// </summary>
 /// <typeparam name="TLogEntry">The type of the log entry.</typeparam>
-public interface IEventSerializer<TLogEntry>
+public interface IEventConverter<TLogEntry>
 {
     /// <summary>
     /// Convert the <typeparamref name="TLogEntry"/> to a <see cref="EventData" /> including any metadata and activity tracing required

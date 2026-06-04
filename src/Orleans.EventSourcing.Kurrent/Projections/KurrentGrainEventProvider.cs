@@ -16,7 +16,7 @@ using System.Collections.Immutable;
 
 namespace Orleans.EventSourcing.Kurrent.Projections;
 
-internal sealed class KurrentGrainEventProvider(GrainInterfaceTypeResolver grainInterfaceTypeResolver, GrainInterfaceTypeToGrainTypeResolver grainInterfaceTypeToGrainTypeResolver, TypeConverter typeConverter, IKurrentClient kurrentClient, IEventSerializerFactory eventSerializerFactory, IKurrentStreamNameProvider streamNameProvider, ILogger<KurrentGrainEventProvider> logger) : IGrainEventProvider
+internal sealed class KurrentGrainEventProvider(GrainInterfaceTypeResolver grainInterfaceTypeResolver, GrainInterfaceTypeToGrainTypeResolver grainInterfaceTypeToGrainTypeResolver, TypeConverter typeConverter, IKurrentClient kurrentClient, IEventConverterFactory eventSerializerFactory, IKurrentStreamNameProvider streamNameProvider, ILogger<KurrentGrainEventProvider> logger) : IGrainEventProvider
 {
     const uint ALL_STREAM_CHECKPOINT_INTERVAL = 10_000; // The interval of AllStreamCheckpointReached
 
@@ -43,13 +43,13 @@ internal sealed class KurrentGrainEventProvider(GrainInterfaceTypeResolver grain
 
     /// <inheritdoc />
     public IAsyncEnumerable<EventStreamUpdate> SubscribeToGrainEvents<TEventBase>(GrainId subscriber, GlobalEventLogPosition startingPosition, Type[] eventFilter, CancellationToken cancellationToken) where TEventBase : class
-        => SubscribeCore(subscriber, startingPosition, GetEventFilterRegex<TEventBase>(eventFilter), eventSerializerFactory.GetEventSerializer<EventEnvelope<TEventBase>>(), cancellationToken);
+        => SubscribeCore(subscriber, startingPosition, GetEventFilterRegex<TEventBase>(eventFilter), eventSerializerFactory.GetEventConverter<EventEnvelope<TEventBase>>(), cancellationToken);
 
     /// <inheritdoc /> 
     public IAsyncEnumerable<EventStreamUpdate> SubscribeToGrainEventNotifications(GrainId subscriber, GlobalEventLogPosition startingPosition, Type[] eventFilter, CancellationToken cancellationToken)
       => SubscribeCore<object>(subscriber, startingPosition, GetEventFilterRegex<object>(eventFilter), null, cancellationToken);
 
-    private async IAsyncEnumerable<EventStreamUpdate> SubscribeCore<TEventBase>(GrainId subscriber, GlobalEventLogPosition startingPosition, IEventFilter eventFilter, IEventSerializer<EventEnvelope<TEventBase>>? eventSerializer,
+    private async IAsyncEnumerable<EventStreamUpdate> SubscribeCore<TEventBase>(GrainId subscriber, GlobalEventLogPosition startingPosition, IEventFilter eventFilter, IEventConverter<EventEnvelope<TEventBase>>? eventSerializer,
         [EnumeratorCancellation] CancellationToken cancellationToken)
         where TEventBase : class
     {
@@ -141,5 +141,5 @@ internal sealed class KurrentGrainEventProvider(GrainInterfaceTypeResolver grain
 
 
     public IAsyncEnumerable<EventStreamUpdate> SubscribeToGrainEvents<TGrain, TEventBase>(GrainId subscriber, GlobalEventLogPosition startingPosition, CancellationToken cancellationToken) where TGrain : IGrain where TEventBase : class
-        => SubscribeCore<TEventBase>(subscriber, startingPosition, StreamFilter.Prefix(streamNameProvider.GetStreamPrefix(grainInterfaceTypeToGrainTypeResolver.GetGrainType(grainInterfaceTypeResolver.GetGrainInterfaceType(typeof(TGrain))))), eventSerializerFactory.GetEventSerializer<EventEnvelope<TEventBase>>(), cancellationToken);
+        => SubscribeCore<TEventBase>(subscriber, startingPosition, StreamFilter.Prefix(streamNameProvider.GetStreamPrefix(grainInterfaceTypeToGrainTypeResolver.GetGrainType(grainInterfaceTypeResolver.GetGrainInterfaceType(typeof(TGrain))))), eventSerializerFactory.GetEventConverter<EventEnvelope<TEventBase>>(), cancellationToken);
 }

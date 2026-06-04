@@ -13,7 +13,7 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
 {
     readonly string streamName;
     readonly IKurrentClient client;
-    readonly IEventSerializer<TLogEntry> eventConverter;
+    readonly IEventConverter<TLogEntry> eventConverter;
     readonly ILogViewAdaptorHost<TLogView, TLogEntry> host;
     readonly Channel<WorkItem> queue = Channel.CreateUnbounded<WorkItem>();
     readonly Task<bool> backgroundWorker;
@@ -22,7 +22,7 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
     readonly TagList observabilityTags;
     bool disposed;
 
-    public KurrentLogViewAdapter(ILogViewAdaptorHost<TLogView, TLogEntry> host, IKurrentClient client, IEventSerializer<TLogEntry> eventConverter, ILogConsistencyProtocolServices services, IKurrentStreamNameProvider streamNameProvider)
+    public KurrentLogViewAdapter(ILogViewAdaptorHost<TLogView, TLogEntry> host, IKurrentClient client, IEventConverter<TLogEntry> eventConverter, ILogConsistencyProtocolServices services, IKurrentStreamNameProvider streamNameProvider)
     {
         this.streamName = streamNameProvider.GetStreamName(services.GrainId);
         this.client = client;

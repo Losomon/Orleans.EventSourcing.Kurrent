@@ -14,7 +14,9 @@ namespace Orleans.EventSourcing.Kurrent.Tests.Grains
         public sealed record Closed() : AccountEvent;
         [GenerateSerializer]
         [Alias("Orleans.EventSourcing.Kurrent.Tests.Grains.AccountEvent.Truncation")]
+#pragma warning disable OEK0002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         [DiscardPriorEvents]
+#pragma warning restore OEK0002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         public sealed record Truncation(decimal Balance) : AccountEvent;
         [GenerateSerializer]
         [Alias("Orleans.EventSourcing.Kurrent.Tests.Grains.AccountEvent.Deposited")]

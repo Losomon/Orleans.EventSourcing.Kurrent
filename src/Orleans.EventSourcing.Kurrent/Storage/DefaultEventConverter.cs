@@ -14,12 +14,12 @@ namespace Orleans.EventSourcing.Kurrent.Storage;
 /// <summary>
 ///     Kurrent-based log consistent event serializer, which uses Kurrent's EventType to avoid encoding type information in the event data.
 /// </summary>
-internal sealed class DefaultEventSerializer<TLogEntry> : IEventSerializer<TLogEntry>
+internal sealed class DefaultEventConverter<TLogEntry> : IEventConverter<TLogEntry>
 {
     private readonly IGrainStorageSerializer _storageSerializer;
     private readonly TypeConverter _typeConverter;
 
-    public DefaultEventSerializer(IOptions<KurrentStorageOptions> storageOptions, TypeConverter typeConverter)
+    public DefaultEventConverter(IOptions<KurrentStorageOptions> storageOptions, TypeConverter typeConverter)
     {
         ArgumentNullException.ThrowIfNull(storageOptions, nameof(storageOptions));
         ArgumentNullException.ThrowIfNull(typeConverter, nameof(typeConverter));

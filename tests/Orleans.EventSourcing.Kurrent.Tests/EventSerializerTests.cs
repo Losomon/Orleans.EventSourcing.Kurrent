@@ -17,7 +17,7 @@ namespace Orleans.EventSourcing.Kurrent.Tests
 {
     public class EventSerializerTests
     {
-        private readonly IEventSerializerFactory eventSerializerFactory;
+        private readonly IEventConverterFactory eventSerializerFactory;
         private readonly IGrainStorageSerializer grainStorageSerializer;
         private static readonly ActivityListener Listener;
 
@@ -59,14 +59,14 @@ namespace Orleans.EventSourcing.Kurrent.Tests
             hb.Services.AddOptions<KurrentStorageOptions>();
             hb.Services.AddTransient<IPostConfigureOptions<KurrentStorageOptions>, DefaultStorageProviderSerializerOptionsConfigurator<KurrentStorageOptions>>();
 
-            hb.Services.AddKeyedSingleton(typeof(DefaultEventSerializer<>), "test", typeof(DefaultEventSerializer<>));
+            hb.Services.AddKeyedSingleton(typeof(DefaultEventConverter<>), "test", typeof(DefaultEventConverter<>));
 
-            hb.Services.AddSingleton<IEventSerializerFactory>((sp) => new EventSerializerFactory(sp, "test"));
+            hb.Services.AddSingleton<IEventConverterFactory>((sp) => new EventConverterFactory(sp, "test"));
             hb.Services.AddSerializer();
 
             var sp = hb.Build();
 
-            eventSerializerFactory = sp.Services.GetRequiredService<IEventSerializerFactory>();
+            eventSerializerFactory = sp.Services.GetRequiredService<IEventConverterFactory>();
             grainStorageSerializer = sp.Services.GetRequiredService<IGrainStorageSerializer>();
         }
 
@@ -94,7 +94,7 @@ namespace Orleans.EventSourcing.Kurrent.Tests
         public void BasicEventRoundtrip()
         {
             var instance = new Event(12435353);
-            var eventSerializer = eventSerializerFactory.GetEventSerializer<Event>();
+            var eventSerializer = eventSerializerFactory.GetEventConverter<Event>();
             var eventData = eventSerializer.SerializeEvent(instance);
             Assert.Equal("EventWithMetadataAlias", eventData.Type);
             Assert.Equal(0, eventData.Metadata.Length);
@@ -115,7 +115,7 @@ namespace Orleans.EventSourcing.Kurrent.Tests
 
             Assert.NotNull(activity);
             var eventWithMetadata = new Event(885633);
-            var eventSerializer = eventSerializerFactory.GetEventSerializer<Event>();
+            var eventSerializer = eventSerializerFactory.GetEventConverter<Event>();
 
             var eventData = eventSerializer.SerializeEvent(eventWithMetadata);
 
@@ -128,9 +128,9 @@ namespace Orleans.EventSourcing.Kurrent.Tests
         {
             var eventEnvelope = new EventEnvelope<string>(Guid.NewGuid(), "howdy", new Dictionary<string, string>() { { "key", "value" } });
 
-            var eventSerializer = eventSerializerFactory.GetEventSerializer<EventEnvelope<string>>();
+            var eventSerializer = eventSerializerFactory.GetEventConverter<EventEnvelope<string>>();
 
-            Assert.IsType<EventEnvelopeSerializer<string>>(eventSerializer);
+            Assert.IsType<EventEnvelopeConveter<string>>(eventSerializer);
 
             var eventData = eventSerializer.SerializeEvent(eventEnvelope);
 

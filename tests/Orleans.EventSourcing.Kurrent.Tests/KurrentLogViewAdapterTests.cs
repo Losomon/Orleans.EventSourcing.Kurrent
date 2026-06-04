@@ -211,7 +211,7 @@ namespace Orleans.EventSourcing.Kurrent.Tests
                 => new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
-        private sealed class TestEventSerializer : IEventSerializer<TestLogEntry>
+        private sealed class TestEventSerializer : IEventConverter<TestLogEntry>
         {
             public TestLogEntry DeserializeEvent(ResolvedEvent logEntry)
             {
@@ -251,7 +251,9 @@ namespace Orleans.EventSourcing.Kurrent.Tests
 
         private sealed record Applied(int Amount) : TestLogEntry;
 
+#pragma warning disable OEK0002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         [DiscardPriorEvents]
+#pragma warning restore OEK0002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         private sealed record Truncate : TestLogEntry;
     }
 }

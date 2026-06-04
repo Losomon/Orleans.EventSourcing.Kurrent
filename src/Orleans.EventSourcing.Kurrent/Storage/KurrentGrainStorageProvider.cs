@@ -13,7 +13,7 @@ namespace Orleans.EventSourcing.Kurrent.Storage;
 ///      Kurrent-based log consistent storage provider. This uses soft-delete for ClearStateAsync() but could
 ///      be changed to write a 'Deleted' event instead, possibly by updating KurrentStorageOptions with a flag.
 /// </summary>
-internal sealed class KurrentGrainStorageProvider(IKurrentClient kurrentClient, IEventSerializerFactory eventSerializer, IKurrentStreamNameProvider streamNameProvider) : IGrainStorage
+internal sealed class KurrentGrainStorageProvider(IKurrentClient kurrentClient, IEventConverterFactory eventSerializer, IKurrentStreamNameProvider streamNameProvider) : IGrainStorage
 {
     private static StreamState ConvertETagToStreamState(string? eTag)
     {
@@ -96,7 +96,7 @@ internal sealed class KurrentGrainStorageProvider(IKurrentClient kurrentClient, 
                 grainState.RecordExists = true;
 
                 var sw = Stopwatch.StartNew();
-                grainState.State = eventSerializer.GetEventSerializer<T>().DeserializeEvent(enumerator.Current);
+                grainState.State = eventSerializer.GetEventConverter<T>().DeserializeEvent(enumerator.Current);
                 Metrics.StateDeserializationLatency.Record(sw.ElapsedMilliseconds, observabilityTags);
 
                 // A second event would indicate the stream metadata wasn't written successfully on the first write
@@ -155,7 +155,7 @@ internal sealed class KurrentGrainStorageProvider(IKurrentClient kurrentClient, 
             var expectedStreamState = ConvertETagToStreamState(grainState.ETag);
 
             var sw = Stopwatch.StartNew();
-            var eventRecord = eventSerializer.GetEventSerializer<T>().SerializeEvent(grainState.State);
+            var eventRecord = eventSerializer.GetEventConverter<T>().SerializeEvent(grainState.State);
             Metrics.StateSerializationLatency.Record(sw.ElapsedMilliseconds, observabilityTags);
 
             var result = await kurrentClient.ConditionalAppendToStreamAsync(streamName,

@@ -7,11 +7,11 @@ namespace Orleans.EventSourcing.Kurrent.Storage;
 
 internal sealed class LogConsistencyProvider : ILogViewAdaptorFactory
 {
-    private readonly IEventSerializerFactory eventSerializer;
+    private readonly IEventConverterFactory eventSerializer;
     private readonly IKurrentClient client;
     private readonly KurrentStorageOptions options;
 
-    internal LogConsistencyProvider(IEventSerializerFactory eventSerializer, IKurrentClient client, KurrentStorageOptions options)
+    internal LogConsistencyProvider(IEventConverterFactory eventSerializer, IKurrentClient client, KurrentStorageOptions options)
     {
         ArgumentNullException.ThrowIfNull(eventSerializer);
         ArgumentNullException.ThrowIfNull(client);
@@ -28,7 +28,7 @@ internal sealed class LogConsistencyProvider : ILogViewAdaptorFactory
         where TLogEntry : class
     {
         ArgumentNullException.ThrowIfNull(services);
-        return new KurrentLogViewAdapter<TLogView, TLogEntry>(hostGrain, client, eventSerializer.GetEventSerializer<TLogEntry>(), services, options.StreamNameProvider);
+        return new KurrentLogViewAdapter<TLogView, TLogEntry>(hostGrain, client, eventSerializer.GetEventConverter<TLogEntry>(), services, options.StreamNameProvider);
     }
 
     /// <inheritdoc />

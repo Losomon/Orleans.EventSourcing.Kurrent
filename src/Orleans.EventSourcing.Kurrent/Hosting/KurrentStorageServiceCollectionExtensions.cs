@@ -42,7 +42,7 @@ public static class KurrentStorageServiceCollectionExtensions
         services.TryAddKeyedSingleton<IGrainEventProvider>(name, (sp, _) =>
         {
             var options = sp.GetRequiredService<IOptionsMonitor<KurrentStorageOptions>>().Get(name);
-            return ActivatorUtilities.CreateInstance<KurrentGrainEventProvider>(sp, sp.GetRequiredKeyedService<IKurrentClient>(name), sp.GetRequiredKeyedService<IEventSerializerFactory>(name), options.StreamNameProvider);
+            return ActivatorUtilities.CreateInstance<KurrentGrainEventProvider>(sp, sp.GetRequiredKeyedService<IKurrentClient>(name), sp.GetRequiredKeyedService<IEventConverterFactory>(name), options.StreamNameProvider);
         });
 
         return services;
@@ -58,7 +58,7 @@ public static class KurrentStorageServiceCollectionExtensions
         services.AddGrainStorage(name, (sp, _) =>
         {
             var client = sp.GetRequiredKeyedService<IKurrentClient>(name);
-            var eventSerializer = sp.GetRequiredKeyedService<IEventSerializerFactory>(name);
+            var eventSerializer = sp.GetRequiredKeyedService<IEventConverterFactory>(name);
             var options = sp.GetRequiredService<IOptionsMonitor<KurrentStorageOptions>>().Get(name);
             return ActivatorUtilities.CreateInstance<KurrentGrainStorageProvider>(sp, client, eventSerializer, options.StreamNameProvider);
         });
@@ -80,7 +80,7 @@ public static class KurrentStorageServiceCollectionExtensions
         services.ConfigureNamedOptionForLogging<KurrentStorageOptions>(name);
 
         services.TryAddKeyedSingleton(name, (sp, _) => KurrentClientFactory.Create(sp, name));
-        services.TryAddKeyedSingleton(typeof(DefaultEventSerializer<>), name, typeof(DefaultEventSerializer<>));
-        services.TryAddKeyedSingleton<IEventSerializerFactory>(name, (serviceProvider, _) => ActivatorUtilities.CreateInstance<EventSerializerFactory>(serviceProvider, name));
+        services.TryAddKeyedSingleton(typeof(DefaultEventConverter<>), name, typeof(DefaultEventConverter<>));
+        services.TryAddKeyedSingleton<IEventConverterFactory>(name, (serviceProvider, _) => ActivatorUtilities.CreateInstance<EventConverterFactory>(serviceProvider, name));
     }
 }

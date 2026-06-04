@@ -16,6 +16,6 @@ internal static class LogConsistencyProviderFactory
     public static LogConsistencyProvider Create(IServiceProvider serviceProvider, string name)
     {
         var options = serviceProvider.GetRequiredService<IOptionsMonitor<KurrentStorageOptions>>();
-        return new LogConsistencyProvider(serviceProvider.GetRequiredKeyedService<IEventSerializerFactory>(name), serviceProvider.GetRequiredKeyedService<IKurrentClient>(name), options.Get(name));
+        return new LogConsistencyProvider(serviceProvider.GetRequiredKeyedService<IEventConverterFactory>(name), serviceProvider.GetRequiredKeyedService<IKurrentClient>(name), options.Get(name));
     }
 }
