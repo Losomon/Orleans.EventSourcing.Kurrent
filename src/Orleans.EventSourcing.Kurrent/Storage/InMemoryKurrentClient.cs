@@ -1,3 +1,5 @@
+using KurrentDB.Client;
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Reflection;
@@ -5,31 +7,31 @@ using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
 
-using KurrentDB.Client;
-
 namespace Orleans.EventSourcing.Kurrent.Storage;
 
 // A pretend subset of Kurrent implemented entirely in memory
 internal sealed class InMemoryKurrentClient : IKurrentClient
 {
+#pragma warning disable CA2213 // Disposable fields should be disposed
     private readonly SemaphoreSlim singleAccess = new(1);
     private readonly Dictionary<string, List<int>> streams = [];
     private readonly Dictionary<string, List<StreamMetadata>> streamMetadata = [];
     private readonly Collection<EventRecord> all = [];
     private readonly BroadcastPublisher<EventRecord> newEventWatcher = new();
+#pragma warning restore CA2213 // Disposable fields should be disposed
 
     private static readonly ConstructorInfo ConditionalWriteResultConstructor = typeof(ConditionalWriteResult).GetConstructor(BindingFlags.NonPublic | BindingFlags.Instance,
                                                                                                                               null,
                                                                                                                               [typeof(StreamState), typeof(Position), typeof(ConditionalWriteStatus),],
                                                                                                                               null)!;
 
-    public void Dispose()
-    {
-        singleAccess.Dispose();
-        newEventWatcher.Dispose();
-    }
+    // Because this type is statically rooted
+    // and reused, we do not clean-up
+    public void Dispose() { }
 
-    public ValueTask DisposeAsync() => default;
+    public ValueTask DisposeAsync()
+        =>ValueTask.CompletedTask;
+    
 
     public async IAsyncEnumerable<ResolvedEvent> ReadStreamAsync(Direction direction,
                                                                  string streamName,
@@ -326,6 +328,11 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
         }
 
     }
+
+    readonly static ConcurrentDictionary<string, IKurrentClient> Clients = [];
+
+    internal static IKurrentClient Get(string name)
+     => Clients.GetOrAdd(name, _ => new InMemoryKurrentClient());
 
     /// <summary>
     /// A simple multi-subscriber broadcast publisher. Each call to

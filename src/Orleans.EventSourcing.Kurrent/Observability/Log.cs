@@ -2,7 +2,7 @@ using KurrentDB.Client;
 
 using Microsoft.Extensions.Logging;
 
-namespace Orleans.EventSourcing.Kurrent;
+namespace Orleans.EventSourcing.Kurrent.Observability;
 
 internal static partial class Log
 {

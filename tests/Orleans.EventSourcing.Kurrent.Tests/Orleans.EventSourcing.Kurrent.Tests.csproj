@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <!-- Tests intentionally exercise the experimental IGrainEventProvider API. -->
@@ -11,6 +11,7 @@
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Orleans.EventSourcing.Kurrent.Reminders\Orleans.EventSourcing.Kurrent.Reminders.csproj" />
     <ProjectReference Include="..\..\src\Orleans.EventSourcing.Kurrent\Orleans.EventSourcing.Kurrent.csproj" />
   </ItemGroup>
   <ItemGroup>

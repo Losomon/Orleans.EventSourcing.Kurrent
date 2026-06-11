@@ -13,21 +13,22 @@ namespace Orleans.EventSourcing.Kurrent.Storage;
 internal static class KurrentClientFactory
 {
     public static Uri InMemoryEmulatorUri { get; } = new Uri("https://kurrentemulator:2113/");
-    readonly static ConcurrentDictionary<string, IKurrentClient> Clients = [];
-
+    public static Uri InMemoryEmulatorUriInsecure { get; } = new Uri("http://kurrentemulator:2113/");
+    
     /// <summary>
     ///     Creates a KurrentClient instance.
     /// </summary>
     public static IKurrentClient Create(IServiceProvider serviceProvider, string name)
     {
         var options = serviceProvider.GetRequiredService<IOptionsMonitor<KurrentStorageOptions>>().Get(name);
-        if (InMemoryEmulatorUri.Equals(options.ClientSettings.ConnectivitySettings.Address))
+        if (InMemoryEmulatorUri.Equals(options.ClientSettings.ConnectivitySettings.Address) ||
+            InMemoryEmulatorUriInsecure.Equals(options.ClientSettings.ConnectivitySettings.Address))
         {
-            return Clients.GetOrAdd(name, new InMemoryKurrentClient());
+            return InMemoryKurrentClient.Get(name);
         }
         else
         {
-            return Clients.GetOrAdd(name, new KurrentClient(options.ClientSettings));
+            return new KurrentClient(options.ClientSettings);
         }
     }
 }

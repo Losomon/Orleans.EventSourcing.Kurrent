@@ -55,11 +55,10 @@ public sealed class BasicTests : IAsyncLifetime
             .StreamNameProvider;
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        cluster.Dispose();
+        await cluster.DisposeAsync();
         kurrentClient.Dispose();
-        return ValueTask.CompletedTask;
     }
 
     [Fact(Timeout = IntegrationTestTimeout)]

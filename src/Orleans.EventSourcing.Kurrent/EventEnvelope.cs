@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 
-namespace Orleans.EventSourcing.Kurrent;
+namespace Orleans.EventSourcing;
 
 /// <summary>
 ///     An envelope that contains an EventId and metadata which may be 

@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+		<PropertyGroup>
+			<PackageId>Orleans.EventSourcing.Kurrent.Reminders</PackageId>
+			<Authors>William Gunaratne</Authors>
+			<Title>Orleans Reminders Provider using Event-Sourcing</Title>
+			<Description>An implementation of Orleans reminders using a JournaledGrain that implements IReminderTable.</Description>
+			<RootNamespace>Orleans.EventSourcing.Kurrent.Reminders</RootNamespace>
+			<AnalysisLevel>latest-all</AnalysisLevel>
+			<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+			<GenerateDocumentationFile>true</GenerateDocumentationFile>
+			<NoWarn>$(NoWarn);OEK0001;CS0618</NoWarn>
+		</PropertyGroup>
+		<ItemGroup>
+			<InternalsVisibleTo Include="Orleans.EventSourcing.Kurrent.Tests" />
+		</ItemGroup>
+		<ItemGroup>
+			<PackageReference Include="KurrentDB.Client" />
+			<PackageReference Include="Microsoft.Orleans.Reminders" />
+			<PackageReference Include="OpenTelemetry.Api" />
+		</ItemGroup>
+		<ItemGroup>
+		  <ProjectReference Include="..\Orleans.EventSourcing.Kurrent\Orleans.EventSourcing.Kurrent.csproj" />
+		</ItemGroup>
+</Project>

@@ -2,17 +2,29 @@
 
 [![NuGet](https://img.shields.io/nuget/v/Orleans.EventSourcing.Kurrent.svg)](https://www.nuget.org/packages/Orleans.EventSourcing.Kurrent)
 
- [Microsoft Orleans](https://learn.microsoft.com/dotnet/orleans/) providers backed by [KurrentDB](https://kurrent.io/) (formerly EventStoreDB)
+[Microsoft Orleans](https://learn.microsoft.com/dotnet/orleans/) providers backed by [KurrentDB](https://kurrent.io/) (formerly EventStoreDB)
+
+This project provides Event Sourcing, State Storage and Reminders providers for Microsoft Orleans backed by KurrentDB.
+
+In addition, it offers some experimental features that are not yet supported by Orleans.EventSourcing, such as event stream truncation and projection Grains.
+
+Event Sourcing is a powerful pattern for modeling complex domains, capturing intent and deriving state. KurrentDB provides an event-native data platform for event-sourcing.
+
+This library aims to provide seamless integration between Orleans and KurrentDB, allowing developers to leverage the strengths of both technologies in their applications.
+
+This library is used in production and has some additional practical features 
+* Using Orlean's Alias attribute to decouple KurrentDB's EventType and the .NET type
+* Event stream truncation
+* Grains that host projections and side-effects
+
+Adding support for storing Grain persistent state and reminders simplifies infrastructure required to host Orleans (perhaps a membership provider is needed next?). Using one storage layer offers a single point-in-time backup of your entire system in KurrentDB, including the state of your Grains and their reminders.
 
 | Provider | Orleans interface | What it persists | When to use |
 | --- | --- | --- | --- |
 | **Log-consistency provider** (`AddKurrentBasedLogConsistencyProvider*`) | `ILogViewAdaptorFactory` for `JournaledGrain<TView, TEntry>` | The full **event log** for the grain — every `RaiseEvent` is appended to the grain's Kurrent stream. The view is rebuilt by replaying events. | Event-sourced grains (`JournaledGrain`). Gives you full history, projections via `IGrainEventProvider`, and replay. |
 | **Grain state storage provider** (`AddKurrentBasedGrainStorageProvider*`) | `IGrainStorage` for `Grain<TState>` / `[PersistentState]` | The **latest snapshot** only — each `WriteStateAsync` appends one event and Kurrent's `MaxCount = 1` stream metadata trims older revisions. | Regular Orleans state persistence when you want it backed by Kurrent (e.g. to keep all storage in one system) |
+| **Reminders provider** (`AddKurrentBasedReminderProvider*`) | `IReminderTable` | Grain Reminders | Use this provider to persist and manage Orleans reminders in KurrentDB. |
 | **Grain event subscription** (`IGrainEventProvider`) ⚠ experimental | n/a | Read-side subscription to the Kurrent `$all` stream, filtered to the streams produced by the log-consistency provider. | Projections / read models built from grain events emitted via the log-consistency provider. |
-
-The two providers are independent: register either, both, or neither. They share `KurrentStorageOptions` (per provider name) so the underlying `KurrentClient` and stream naming can be configured the same way.
-
-By default each grain's stream is named `{GrainType}-{Key}` (log-consistency) or `{GrainType}-{stateName}|{Key}` (state storage). The naming scheme is pluggable — see [Custom stream naming](#custom-stream-naming).
 
 ## Install
 
@@ -42,6 +54,9 @@ builder.UseOrleans(silo =>
 
     // Grain state storage provider — required for Grain<TState> / [PersistentState] backed by Kurrent.
     silo.AddKurrentBasedGrainStorageProviderAsDefault(o => o.ClientSettings = settings);
+
+    // Reminders provider — if you want to persist Orleans reminders in Kurrent.
+    silo.AddKurrentBasedReminderProviderAsDefault(o => o.ClientSettings = settings);
 });
 ```
 
@@ -112,6 +127,14 @@ public sealed class SettingsGrain(
 
 This provider does **not** keep event history — if you need history, use the log-consistency provider instead.
 
+## Reminders provider
+
+The reminders provider event-sources Orleans reminders to KurrentDB, using a single JournaledGrain implementation that implements the `IReminderTable` interface. 
+
+The current implemenation is intended to offer support for reminders in clusters where the usage will be relatively light, as all reminder data for the cluster is materialised into grain state.
+
+Clusters with heavy reminder usage should use a more traditional reminders provider implementation that persists directly to a database.
+
 ## Configuration
 
 `KurrentStorageOptions` is configured per provider name. The same options type is used by both providers; configuring one named instance does not affect the other.
@@ -122,7 +145,9 @@ This provider does **not** keep event history — if you need history, use the l
 | `GrainStorageSerializer` | Orleans' `IGrainStorageSerializer` used by the default event serializer. |
 | `StreamNameProvider` | `IKurrentStreamNameProvider` controlling stream-name layout. Defaults to `KurrentStreamName.Default`. |
 
-### Custom stream naming
+### Custom event stream naming
+
+By default each grain's stream is named `{GrainType}-{Key}` (log-consistency) or `{GrainType}-{stateName}|{Key}` (state storage). The naming scheme is pluggable — see [Custom stream naming](#custom-stream-naming).
 
 Both providers, and the projection subscription, route through `IKurrentStreamNameProvider`. The default produces:
 
@@ -183,11 +208,9 @@ When you use `EventEnvelope<T>` a different `IEventConverter` is used which read
 
 ## Notes & limitations
 
-- The two providers are independent. Registering the state storage provider does **not** give you `JournaledGrain` support, and vice versa.
-- The state storage provider keeps only the latest snapshot (`MaxCount = 1`) — do not use it for grains where you need event history.
-- The state storage provider's `ClearStateAsync` performs a Kurrent soft-delete; it does not write a tombstone event.
-- The default stream-name format uses `-` as the grain-type separator and `|` between `stateName` and grain key.
+- The storage provider's delete operations are mapped to Kurrent soft-deletes.
 - `IGrainEventProvider` subscriptions only observe streams written by the log-consistency provider; state-storage snapshot writes are not exposed.
+- Read-optimisation snapshots are not supported, an event sourced grain will load all events on activation. Business snapshots are supported using events marked with `DiscardPriorEventsAttribute`
 
 ## Versioning
 

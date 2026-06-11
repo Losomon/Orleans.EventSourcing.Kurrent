@@ -10,6 +10,7 @@
     <File Path="LICENSE.md" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Orleans.EventSourcing.Kurrent.Reminders/Orleans.EventSourcing.Kurrent.Reminders.csproj" />
     <Project Path="src/Orleans.EventSourcing.Kurrent/Orleans.EventSourcing.Kurrent.csproj" />
   </Folder>
   <Folder Name="/tests/">
