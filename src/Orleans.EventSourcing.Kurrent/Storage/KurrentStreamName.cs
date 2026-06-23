@@ -16,9 +16,9 @@ public sealed class KurrentStreamName : IKurrentStreamNameProvider
     static string Encode(string value)
     {
         // Escape backslash first to avoid double-escaping
-        var s = value.Replace(@"\", @"\\", StringComparison.Ordinal);
-        s = s.Replace("|", @"\|", StringComparison.Ordinal);
-        s = s.Replace("-", @"\-", StringComparison.Ordinal);
+        var s = value.Replace($"{ESCAPE}", @"\\", StringComparison.Ordinal);
+        s = s.Replace($"{GRAIN_TYPE_SEPARATOR}", @"\-", StringComparison.Ordinal);
+        s = s.Replace($"{STATE_KEY_SEPARATOR}", @"\|", StringComparison.Ordinal);
         return s.Replace("$", @"\$", StringComparison.Ordinal);
     }
     
@@ -51,19 +51,40 @@ public sealed class KurrentStreamName : IKurrentStreamNameProvider
     public string GetStreamPrefix(GrainType grainType)
     {
         ArgumentOutOfRangeException.ThrowIfEqual(grainType, default);
-        return $"{Encode(grainType.ToString() ?? throw new ArgumentException("grainType.ToString() cannot be null", nameof(grainType)))}{GRAIN_TYPE_SEPARATOR}";
+        return $"{Encode(grainType.ToString() ?? throw new ArgumentException("grainType.ToString() cannot be null", nameof(grainType)))}";
     }
 
     /// <inheritdoc />
     public string GetStreamName(string stateName, GrainId grainId)
     {
         ArgumentNullException.ThrowIfNullOrWhiteSpace(stateName);
-        return $"{GetStreamPrefix(grainId.Type)}{Encode(stateName)}{STATE_KEY_SEPARATOR}{Encode(grainId.Key.ToString()!)}";
+        if (grainId.Key.ToString() is not {  } keyStr)
+        {
+            return $"{GetStreamPrefix(grainId.Type)}{GRAIN_TYPE_SEPARATOR}{Encode(stateName)}";
+        }
+        else
+        {
+            return $"{GetStreamPrefix(grainId.Type)}{GRAIN_TYPE_SEPARATOR}{Encode(keyStr)}{STATE_KEY_SEPARATOR}{Encode(stateName)}";
+        }
     }
 
     /// <inheritdoc />
-    public string GetStreamName(GrainId grainId) => $"{GetStreamPrefix(grainId.Type)}{Encode(grainId.Key.ToString()!)}"; // decided to exclude ServiceId and conform to pattern {type}-{id} as per ResponseStream in FeedbackProcessor 
-
+    public string GetStreamName(GrainId grainId)
+    {
+        if (grainId.IsDefault)
+        {
+            ArgumentOutOfRangeException.ThrowIfEqual(grainId, default);
+        }
+        var keyStr = grainId.Key.ToString();
+        if (keyStr is null)
+        {
+            return $"{GetStreamPrefix(grainId.Type)}";
+        }
+        else
+        {
+            return $"{GetStreamPrefix(grainId.Type)}{GRAIN_TYPE_SEPARATOR}{Encode(keyStr)}";
+        }
+    }
     /// <inheritdoc />
     public GrainId GetGrainId(string streamName)
     {
@@ -86,21 +107,24 @@ public sealed class KurrentStreamName : IKurrentStreamNameProvider
         var typeSepIndex = IndexOfUnescaped(streamName, GRAIN_TYPE_SEPARATOR);
         if (typeSepIndex < 0)
         {
-            grainId = default;
-            return false;
+            GrainType grainType = GrainType.Create(Decode(streamName));
+            grainId = new GrainId(grainType, default);
+            return true;
         }
+        else
+        {
+            var encodedType = streamName[0..typeSepIndex];
+            var rest = streamName[(typeSepIndex + 1)..];
 
-        var encodedType = streamName[0..typeSepIndex];
-        var rest = streamName[(typeSepIndex + 1)..];
+            // rest is either {enc_key}  or  {enc_stateName}|{enc_key}
+            var stateSepIndex = IndexOfUnescaped(rest, STATE_KEY_SEPARATOR);
+            var encodedKey = stateSepIndex < 0 ? rest : rest[..stateSepIndex];
 
-        // rest is either {enc_key}  or  {enc_stateName}|{enc_key}
-        var stateSepIndex = IndexOfUnescaped(rest, STATE_KEY_SEPARATOR);
-        var encodedKey = stateSepIndex < 0 ? rest : rest[(stateSepIndex + 1)..];
+            GrainType grainType = GrainType.Create(Decode(encodedType));
+            IdSpan grainKey = IdSpan.Create(Decode(encodedKey));
 
-        GrainType grainType = GrainType.Create(Decode(encodedType));
-        IdSpan grainKey = IdSpan.Create(Decode(encodedKey));
-
-        grainId = new GrainId(grainType, grainKey);
-        return true;
+            grainId = new GrainId(grainType, grainKey);
+            return true;
+        }
     }
 }

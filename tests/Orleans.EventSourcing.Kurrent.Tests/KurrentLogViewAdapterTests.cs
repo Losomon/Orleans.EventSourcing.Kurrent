@@ -191,6 +191,9 @@ namespace Orleans.EventSourcing.Kurrent.Tests
             public Task<DeleteResult> DeleteStreamAsync(string streamName, StreamState expectedRevision, CancellationToken token)
                 => inner.DeleteStreamAsync(streamName, expectedRevision, token);
 
+            public Task<DeleteResult> TombstoneStreamAsync(string streamName, StreamState expectedRevision, CancellationToken token)
+                => inner.TombstoneStreamAsync(streamName, expectedRevision, token);
+
             public Task<StreamMetadataResult> GetStreamMetadata(string streamName, CancellationToken token)
                 => inner.GetStreamMetadata(streamName, token);
 

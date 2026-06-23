@@ -16,4 +16,9 @@
   <Folder Name="/tests/">
     <Project Path="tests/Orleans.EventSourcing.Kurrent.Tests/Orleans.EventSourcing.Kurrent.Tests.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/LoadTest.Grains/LoadTest.Grains.csproj" />
+    <Project Path="samples/LoadTest.Silo/LoadTest.Silo.csproj" />
+    <Project Path="samples/LoadTest.Client/LoadTest.Client.csproj" />
+  </Folder>
 </Solution>

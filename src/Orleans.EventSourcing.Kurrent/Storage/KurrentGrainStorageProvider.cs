@@ -10,8 +10,7 @@ using Orleans.EventSourcing.Kurrent.Observability;
 namespace Orleans.EventSourcing.Kurrent.Storage;
 
 /// <summary>
-///      Kurrent-based log consistent storage provider. This uses soft-delete for ClearStateAsync() but could
-///      be changed to write a 'Deleted' event instead, possibly by updating KurrentStorageOptions with a flag.
+///      Kurrent-based log consistent storage provider.
 /// </summary>
 internal sealed class KurrentGrainStorageProvider(IKurrentClient kurrentClient, IEventConverterFactory eventSerializer, IKurrentStreamNameProvider streamNameProvider) : IGrainStorage
 {

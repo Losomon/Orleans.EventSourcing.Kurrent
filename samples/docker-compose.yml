@@ -1,0 +1,33 @@
+# Local KurrentDB instance for the LoadTest sample.
+#
+# Start:  docker compose -f samples/docker-compose.yml up -d
+# Stop:   docker compose -f samples/docker-compose.yml down -v
+#
+# Then point the silo at it before starting:
+#   $env:KURRENT_CONNECTION_STRING = "esdb://localhost:2113?tls=false"
+#   dotnet run --project samples\LoadTest.Silo -c Release
+#
+# Web UI: http://localhost:2113
+services:
+  kurrentdb:
+    image: kurrentplatform/kurrentdb:25.1
+    container_name: loadtest-kurrentdb
+    environment:
+      KURRENTDB_CLUSTER_SIZE: 1
+      KURRENTDB_NODE_PORT: 2113
+      KURRENTDB_INSECURE: "true"
+      KURRENTDB_ENABLE_ATOM_PUB_OVER_HTTP: "true"
+    ports:
+      - "2113:2113"
+    volumes:
+      - kurrentdb-data:/var/lib/kurrentdb
+      - kurrentdb-logs:/var/log/kurrentdb
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:2113/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+volumes:
+  kurrentdb-data:
+  kurrentdb-logs:

@@ -65,5 +65,11 @@ internal sealed class ExceptionalKurrentClientWrapper(IKurrentClient passthrough
     public IAsyncEnumerable<StreamMessage> CatchUpSubscription(FromAll start, IEventFilter eventFilter, uint checkpointInterval, CancellationToken cancellationToken)
         => passthrough.CatchUpSubscription(start, eventFilter, checkpointInterval, cancellationToken);
 
+    public Task<DeleteResult> TombstoneStreamAsync(string streamName, StreamState expectedRevision, CancellationToken token)
+    {
+        ThrowIfException(streamName);
+        return passthrough.TombstoneStreamAsync(streamName, expectedRevision, token);
+    }
+
     #endregion
 }

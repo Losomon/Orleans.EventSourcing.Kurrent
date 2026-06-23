@@ -556,10 +556,8 @@ public sealed class BasicTests : IAsyncLifetime
         Assert.Equal(0, await account.GetTentativeBalance());
         Assert.Empty(await account.GetEvents());
 
-        // Re-appending after a soft delete should succeed and the new view should reflect only the new event.
-        await account.Deposit(7);
-        Assert.Equal(7, await account.GetConfirmedBalance());
-        Assert.Single(await account.GetEvents());
+        // Re-appending after a hard delete should fail,
+        await Assert.ThrowsAsync<InconsistentStateException>(() => account.Deposit(7));
     }
 
     [Fact(Timeout = IntegrationTestTimeout)]

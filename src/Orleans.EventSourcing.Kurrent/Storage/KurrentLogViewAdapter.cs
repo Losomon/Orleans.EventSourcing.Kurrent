@@ -101,9 +101,6 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
 
     public Task PreOnActivate() => Task.CompletedTask;
 
-
-
-
     public async Task<IReadOnlyList<TLogEntry>> RetrieveLogSegment(int fromVersion, int toVersion)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
@@ -242,14 +239,14 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
                         }
                         break;
                     case WorkItemType.Clear:
-                        // Soft delete the stream. We use the locally tracked ConfirmedVersion as the expected
+                        // Hard delete the stream. We use the locally tracked ConfirmedVersion as the expected
                         // stream state, which mirrors the optimistic-concurrency approach used by appends.
                         // If we have no confirmed entries there is nothing to delete (the stream may not exist),
                         // matching KurrentGrainStorageProvider.ClearStateAsync which skips when the ETag is empty.
                         // See https://github.com/kurrent-io/KurrentDB/issues/4637
                         if (ConfirmedVersion > 0)
                         {
-                            _ = await client.DeleteStreamAsync(streamName, ConfirmedVersion.ToStreamState(), token).ConfigureAwait(true);
+                            _ = await client.TombstoneStreamAsync(streamName, ConfirmedVersion.ToStreamState(), token).ConfigureAwait(true);
                         }
 
                         // Reset in-memory state to match an empty stream.

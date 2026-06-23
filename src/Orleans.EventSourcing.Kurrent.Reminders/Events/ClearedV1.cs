@@ -6,7 +6,7 @@
 #pragma warning restore OEK0002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 internal sealed record ClearedV1() : ReminderEvent
 {
-    internal override void Apply(KurrentReminderTableGrainState state)
-     => state.Apply(this);    
+    internal override void Apply(KurrentReminderTableGrainState state, Guid eventId)
+     => state.Apply(this, eventId);    
 }
 

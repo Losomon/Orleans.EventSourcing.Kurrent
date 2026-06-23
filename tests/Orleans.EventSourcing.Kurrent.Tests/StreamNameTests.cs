@@ -44,7 +44,7 @@ namespace Orleans.EventSourcing.Kurrent.Tests
         { 
             var streamName = kurrentStreamName.GetStreamName(@"|-\", GrainId.Parse("test/test"));
 
-            Assert.Equal(@"test-\|\-\\|test", streamName);
+            Assert.Equal(@"test-test|\|\-\\", streamName);
 
             var output = kurrentStreamName.GetGrainId(streamName);
 
@@ -53,7 +53,7 @@ namespace Orleans.EventSourcing.Kurrent.Tests
 
         [Fact]
         public void GetStreamPrefixReturnsExpectedFormat()
-            => Assert.Equal("mytype-", kurrentStreamName.GetStreamPrefix(GrainType.Create("mytype")));
+            => Assert.Equal("mytype", kurrentStreamName.GetStreamPrefix(GrainType.Create("mytype")));
 
         [Fact]
         public void GetStreamNameWithKeyReturnsExpectedFormat()
@@ -68,7 +68,7 @@ namespace Orleans.EventSourcing.Kurrent.Tests
 
         [Fact]
         public void GetStreamNameWithStateNameReturnsExpectedFormat()
-            => Assert.Equal("test-mystate|mykey", kurrentStreamName.GetStreamName("mystate", GrainId.Parse("test/mykey")));
+            => Assert.Equal("test-mykey|mystate", kurrentStreamName.GetStreamName("mystate", GrainId.Parse("test/mykey")));
 
         [Fact]
         public void TryGetGrainIdValidStreamName()
@@ -88,10 +88,18 @@ namespace Orleans.EventSourcing.Kurrent.Tests
 
         [Fact]
         public void TryGetGrainIdNoSeparator()
-            => Assert.False(kurrentStreamName.TryGetGrainId("nostreamkey", out _));
+        {
+            Assert.True(kurrentStreamName.TryGetGrainId("nostreamkey", out var grainId));
+            Assert.Equal("nostreamkey", grainId.Type.ToString());
+            Assert.Equal(default, grainId.Key);
+        }
 
         [Fact]
         public void GetGrainIdUnsupportedFormatThrows()
-            => Assert.Throws<ArgumentException>(() => kurrentStreamName.GetGrainId("nostreamkey"));
+        { 
+            var grainId = kurrentStreamName.GetGrainId("nostreamkey");
+            Assert.Equal("nostreamkey", grainId.Type.ToString());
+            Assert.Equal(default, grainId.Key);
+        }
     }
 }

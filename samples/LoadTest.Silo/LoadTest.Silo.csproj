@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Orleans.Server" />
+	<PackageReference Include="Microsoft.Orleans.Dashboard" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LoadTest.Grains\LoadTest.Grains.csproj" />
+    <ProjectReference Include="..\..\src\Orleans.EventSourcing.Kurrent\Orleans.EventSourcing.Kurrent.csproj" />
+    <ProjectReference Include="..\..\src\Orleans.EventSourcing.Kurrent.Reminders\Orleans.EventSourcing.Kurrent.Reminders.csproj" />
+  </ItemGroup>
+
+</Project>

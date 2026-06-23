@@ -4,20 +4,7 @@
 
 [Microsoft Orleans](https://learn.microsoft.com/dotnet/orleans/) providers backed by [KurrentDB](https://kurrent.io/) (formerly EventStoreDB)
 
-This project provides Event Sourcing, State Storage and Reminders providers for Microsoft Orleans backed by KurrentDB.
-
-In addition, it offers some experimental features that are not yet supported by Orleans.EventSourcing, such as event stream truncation and projection Grains.
-
-Event Sourcing is a powerful pattern for modeling complex domains, capturing intent and deriving state. KurrentDB provides an event-native data platform for event-sourcing.
-
-This library aims to provide seamless integration between Orleans and KurrentDB, allowing developers to leverage the strengths of both technologies in their applications.
-
-This library is used in production and has some additional practical features 
-* Using Orlean's Alias attribute to decouple KurrentDB's EventType and the .NET type
-* Event stream truncation
-* Grains that host projections and side-effects
-
-Adding support for storing Grain persistent state and reminders simplifies infrastructure required to host Orleans (perhaps a membership provider is needed next?). Using one storage layer offers a single point-in-time backup of your entire system in KurrentDB, including the state of your Grains and their reminders.
+This project adds KurrentDB support to Microsoft Orleans.
 
 | Provider | Orleans interface | What it persists | When to use |
 | --- | --- | --- | --- |
@@ -77,6 +64,35 @@ public sealed class AccountGrain : JournaledGrain<AccountState, AccountEvent>, I
 }
 ```
 
+### Truncating the event stream
+
+The provider supports truncating the event stream by using the `DiscardPriorEvents` attribute on an event type. 
+
+When an event with this attribute is comitted, all prior events in the stream will be discarded.
+
+This can be used to write a tombstone event e.g. 'AccountClosed' or a summary event e.g. 'AccountBalance' 
+
+```csharp
+
+[DiscardPriorEvents]
+[Alias("Account.Closed.V1")]
+public record AccountClosed(DateTime ClosedAt) : AccountEvent;
+
+public sealed class AccountGrain : JournaledGrain<AccountState, AccountEvent>, IAccountGrain
+{
+    public Task CloseAccount()
+    {
+        RaiseEvent(new AccountEvent.AccountClosed(DateTime.UtcNow));
+        return ConfirmEvents();
+    }
+}
+```
+
+### Deleting the event stream
+
+The log-consistency provider supports tombstoning the event stream using `JournalGrain.ClearLogAsync`, once deleted a stream cannot be reused in Kurrent.
+The state-based provider supports soft deleting the stream using `Grain<TState>.ClearStateAsync`, which will delete the stream and allow it to be reused in Kurrent.
+
 ### Subscribing to grain events (projections)
 
 Resolve `IGrainEventProvider` from the silo container and call one of the `SubscribeToGrainEvents*` overloads. This reads the Kurrent `$all` stream filtered to streams written by the log-consistency provider, deserializes each event, and yields it together with the originating `GrainId` and version:
@@ -129,11 +145,9 @@ This provider does **not** keep event history — if you need history, use the l
 
 ## Reminders provider
 
-The reminders provider event-sources Orleans reminders to KurrentDB, using a single JournaledGrain implementation that implements the `IReminderTable` interface. 
+The reminders provider records Orleans reminder upserts and removals as discrete events in KurrentDB via a JournaledGrain implementing the Orleans `IReminderTable` interface. 
 
-The current implemenation is intended to offer support for reminders in clusters where the usage will be relatively light, as all reminder data for the cluster is materialised into grain state.
-
-Clusters with heavy reminder usage should use a more traditional reminders provider implementation that persists directly to a database.
+Reminders are persisted to a single stream. If you have high reminder churn, the stream will become large and it will take time to read the entire stream on startup.
 
 ## Configuration
 
@@ -208,7 +222,7 @@ When you use `EventEnvelope<T>` a different `IEventConverter` is used which read
 
 ## Notes & limitations
 
-- The storage provider's delete operations are mapped to Kurrent soft-deletes.
+- The storage provider's delete operations are mapped to Kurrent soft-deletes - Kurrent retains the last event in a stream in the $all stream.
 - `IGrainEventProvider` subscriptions only observe streams written by the log-consistency provider; state-storage snapshot writes are not exposed.
 - Read-optimisation snapshots are not supported, an event sourced grain will load all events on activation. Business snapshots are supported using events marked with `DiscardPriorEventsAttribute`
 

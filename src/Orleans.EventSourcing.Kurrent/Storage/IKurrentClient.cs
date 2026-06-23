@@ -17,6 +17,10 @@ internal interface IKurrentClient : IDisposable, IAsyncDisposable
                                                 StreamState expectedRevision,
                                                 CancellationToken token);
 
+    public Task<DeleteResult> TombstoneStreamAsync(string streamName,
+                                                StreamState expectedRevision,
+                                                CancellationToken token);
+
     public IAsyncEnumerable<ResolvedEvent> ReadStreamAsync(Direction direction,
                                                            string streamName,
                                                            StreamPosition position,

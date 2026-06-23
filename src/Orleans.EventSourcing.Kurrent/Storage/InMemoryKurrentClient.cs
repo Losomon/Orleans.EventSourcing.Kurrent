@@ -16,6 +16,7 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
     private readonly SemaphoreSlim singleAccess = new(1);
     private readonly Dictionary<string, List<int>> streams = [];
     private readonly Dictionary<string, List<StreamMetadata>> streamMetadata = [];
+    private readonly HashSet<string> tombstoned = [];
     private readonly Collection<EventRecord> all = [];
     private readonly BroadcastPublisher<EventRecord> newEventWatcher = new();
 #pragma warning restore CA2213 // Disposable fields should be disposed
@@ -112,6 +113,11 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
         await singleAccess.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            if (tombstoned.Contains(streamName))
+            {
+                throw new StreamDeletedException(streamName);
+            }
+
             var streamState = StreamState.NoStream;
             if (streams.TryGetValue(streamName, out var events))
             {
@@ -333,6 +339,37 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
 
     internal static IKurrentClient Get(string name)
      => Clients.GetOrAdd(name, _ => new InMemoryKurrentClient());
+
+    public async Task<DeleteResult> TombstoneStreamAsync(string streamName, StreamState expectedRevision, CancellationToken token)
+    {
+        await singleAccess.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            if (!streams.TryGetValue(streamName, out var events))
+            {
+                return new DeleteResult();
+            }
+
+            var metadata = GetStreamMetadataCore(streamName);
+            var currentRevision = StreamState.StreamRevision(all[events[^1]].EventNumber);
+
+            if (currentRevision != expectedRevision
+                && (metadata.Metadata.TruncateBefore is null || all[events[^1]].EventNumber >= metadata.Metadata.TruncateBefore))
+            {
+                throw new WrongExpectedVersionException(streamName, expectedRevision, currentRevision);
+            }
+
+            // Hard delete: remove stream data and mark as permanently tombstoned
+            streams.Remove(streamName);
+            tombstoned.Add(streamName);
+
+            return new DeleteResult();
+        }
+        finally
+        {
+            singleAccess.Release();
+        }
+    }
 
     /// <summary>
     /// A simple multi-subscriber broadcast publisher. Each call to

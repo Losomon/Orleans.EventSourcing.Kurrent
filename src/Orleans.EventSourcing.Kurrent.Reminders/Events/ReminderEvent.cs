@@ -2,5 +2,5 @@
 
 internal abstract record ReminderEvent
 {
-    internal abstract void Apply(KurrentReminderTableGrainState state);
+    internal abstract void Apply(KurrentReminderTableGrainState state, Guid eventId);
 }

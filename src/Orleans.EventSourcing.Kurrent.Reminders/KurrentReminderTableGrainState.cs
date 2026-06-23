@@ -7,29 +7,43 @@ internal sealed class KurrentReminderTableGrainState
     private readonly Dictionary<GrainId, ReminderCollection> reminders = [];
     public IReadOnlyDictionary<GrainId, ReminderCollection> Reminders => reminders;
 
-    internal void Apply(Upserted upsertedEvent)
+    internal void Apply(UpsertedV1 upsertedEvent, Guid eventId)
     {
-        if (!reminders.TryGetValue(upsertedEvent.Entry.GrainId, out var list))
+        if (!reminders.TryGetValue(upsertedEvent.GrainId, out var list))
         {
-            reminders[upsertedEvent.Entry.GrainId] = [upsertedEvent.Entry];
+            reminders[upsertedEvent.GrainId] = [new ReminderEntry()
+            {
+                GrainId = upsertedEvent.GrainId,
+                ReminderName = upsertedEvent.ReminderName,
+                StartAt = upsertedEvent.StartAt,
+                Period = upsertedEvent.Period,
+                ETag = eventId.ToString("N")
+            }];
         }
         else
         {
-            list.Remove(upsertedEvent.Entry.ReminderName);
-            list.Add(upsertedEvent.Entry);
+            list.Remove(upsertedEvent.ReminderName);
+            list.Add(new ReminderEntry()
+            {
+                GrainId = upsertedEvent.GrainId,
+                ReminderName = upsertedEvent.ReminderName,
+                StartAt = upsertedEvent.StartAt,
+                Period = upsertedEvent.Period,
+                ETag = eventId.ToString("N")
+            });
         }
     }
 
-    internal void Apply(RemovedV1 removedEvent)
+    internal void Apply(RemovedV1 removedEvent, Guid eventId)
     {
-        if (reminders.TryGetValue(removedEvent.Entry.GrainId, out var list)
-            && list.Remove(removedEvent.Entry.ReminderName)
+        if (reminders.TryGetValue(removedEvent.GrainId, out var list)
+            && list.Remove(removedEvent.ReminderName)
             && list.Count == 0)
         {
-            _ = reminders.Remove(removedEvent.Entry.GrainId);            
+            _ = reminders.Remove(removedEvent.GrainId);            
         }
     }
 
-    internal void Apply(ClearedV1 _)
+    internal void Apply(ClearedV1 _, Guid __)
      => reminders.Clear();    
 }

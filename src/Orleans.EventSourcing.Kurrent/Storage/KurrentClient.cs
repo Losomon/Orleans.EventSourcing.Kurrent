@@ -52,6 +52,9 @@ internal sealed class KurrentClient(KurrentDBClientSettings settings) : IKurrent
     public IAsyncEnumerable<StreamMessage> CatchUpSubscription(FromAll start, IEventFilter eventFilter, uint checkpointInterval, CancellationToken cancellationToken)
         => client.SubscribeToAll(start, filterOptions: new SubscriptionFilterOptions(eventFilter, checkpointInterval), cancellationToken: cancellationToken).Messages;
 
+    public Task<DeleteResult> TombstoneStreamAsync(string streamName, StreamState expectedRevision, CancellationToken token)
+        => client.TombstoneAsync(streamName, expectedRevision, cancellationToken: token);
+
     public void Dispose() => client.Dispose();
 
     public ValueTask DisposeAsync() => client.DisposeAsync();
