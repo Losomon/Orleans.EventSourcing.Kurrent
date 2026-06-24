@@ -46,7 +46,8 @@ jobs:
         uses: NuGet/login@v1
         id: login
         with:
-          user: ${{ github.actor }}
+          # Must be your nuget.org username (profile name), NOT github.actor and NOT an email.
+          user: ${{ secrets.NUGET_USER }}
     
       - name: Push to NuGet.org (trusted publishing)
         run: |
