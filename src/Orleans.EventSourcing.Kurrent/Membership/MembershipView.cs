@@ -94,7 +94,7 @@ internal sealed record MembershipView
         foreach (var item in Members)
         {
             if (item.Value.Status != SiloStatus.Active && 
-                new DateTime(Math.Max(item.Value.IAmAliveTime.Ticks, item.Value.StartTime.Ticks)) < beforeDate)
+                new DateTime(Math.Max(item.Value.IAmAliveTime.Ticks, item.Value.StartTime.Ticks), DateTimeKind.Utc) < beforeDate)
             {
                 remaining = remaining.Remove(item.Key);
             }

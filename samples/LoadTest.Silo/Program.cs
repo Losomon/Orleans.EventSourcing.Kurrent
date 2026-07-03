@@ -1,5 +1,6 @@
 using KurrentDB.Client;
 using LoadTest.Silo;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Orleans.Dashboard;
@@ -21,7 +22,7 @@ var serializerName = (Environment.GetEnvironmentVariable("GRAIN_SERIALIZER") ?? 
 
 var clientSettings = KurrentDBClientSettings.Create(connectionString);
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 builder.Logging.AddFilter("Orleans", LogLevel.Warning);
 builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
@@ -43,6 +44,8 @@ builder.UseOrleans(silo =>
 });
 
 var host = builder.Build();
+
+host.MapOrleansDashboard();
 
 Console.WriteLine($"LoadTest silo starting (Kurrent: {connectionString}, serializer: {serializerName})...");
 await host.StartAsync();

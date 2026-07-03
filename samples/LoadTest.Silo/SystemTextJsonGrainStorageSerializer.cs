@@ -13,6 +13,6 @@ internal sealed class SystemTextJsonGrainStorageSerializer(JsonSerializerOptions
     public BinaryData Serialize<T>(T input)
         => BinaryData.FromObjectAsJson<T>(input, options);
 
-    public T Deserialize<T>(BinaryData input)
+    public T? Deserialize<T>(BinaryData input)
         => input.ToObjectFromJson<T>(options);
 }
