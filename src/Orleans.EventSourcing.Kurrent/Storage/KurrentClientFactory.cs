@@ -20,15 +20,31 @@ internal static class KurrentClientFactory
     /// </summary>
     public static IKurrentClient Create(IServiceProvider serviceProvider, string name)
     {
-        var options = serviceProvider.GetRequiredService<IOptionsMonitor<KurrentStorageOptions>>().Get(name);
-        if (InMemoryEmulatorUri.Equals(options.ClientSettings.ConnectivitySettings.Address) ||
-            InMemoryEmulatorUriInsecure.Equals(options.ClientSettings.ConnectivitySettings.Address))
+        var clientSettings = serviceProvider.GetRequiredService<IOptionsMonitor<KurrentStorageOptions>>().Get(name).ClientSettings;
+
+        if (InMemoryEmulatorUri.Equals(clientSettings.ConnectivitySettings.Address) ||
+            InMemoryEmulatorUriInsecure.Equals(clientSettings.ConnectivitySettings.Address))
         {
             return InMemoryKurrentClient.Get(name);
         }
         else
         {
-            return new KurrentClient(options.ClientSettings);
+            return new KurrentClient(clientSettings);
+        }
+    }
+
+    public static IKurrentClient Create(IServiceProvider serviceProvider)
+    {
+        var clientSettings = serviceProvider.GetRequiredService<IOptions<KurrentClusteringOptions>>().Value.ClientSettings;
+
+        if (InMemoryEmulatorUri.Equals(clientSettings.ConnectivitySettings.Address) ||
+            InMemoryEmulatorUriInsecure.Equals(clientSettings.ConnectivitySettings.Address))
+        {
+            return InMemoryKurrentClient.Get(string.Empty);
+        }
+        else
+        {
+            return new KurrentClient(clientSettings);
         }
     }
 }

@@ -35,6 +35,7 @@ public static class KurrentReminderServiceCollectionExtensions
     public static ISiloBuilder AddKurrentReminderService(this ISiloBuilder siloBuilder, Action<KurrentStorageOptions> configureOptions)
     {
         ArgumentNullException.ThrowIfNull(siloBuilder);
+        siloBuilder.AddKurrentBasedLogConsistencyProvider(LOG_PROVIDER_NAME, configureOptions);
         siloBuilder.Services.AddKurrentReminderService(options =>
         {
             options.Configure(x => x.GrainStorageSerializer = new SystemTextJsonGrainStorageSerializer());
@@ -45,10 +46,8 @@ public static class KurrentReminderServiceCollectionExtensions
 
     internal static IServiceCollection AddKurrentReminderService(this IServiceCollection serviceCollection, Action<OptionsBuilder<KurrentStorageOptions>>? configureOptions = null)
     {
-        serviceCollection.AddKurrentBasedLogConsistencyProvider(LOG_PROVIDER_NAME, configureOptions);
         serviceCollection.AddReminders();
-        serviceCollection.AddSingleton<IReminderTable, KurrentReminderTableGrainProxy>();
-        
+        serviceCollection.AddSingleton<IReminderTable, KurrentReminderTableGrainProxy>();        
         return serviceCollection;
     }
 }

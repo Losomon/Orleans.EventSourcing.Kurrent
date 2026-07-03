@@ -1,8 +1,10 @@
-using System.Diagnostics;
+using KurrentDB.Client;
 using LoadTest.Grains;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Orleans.EventSourcing.Kurrent.Hosting;
+using System.Diagnostics;
 
 // ---------------------------------------------------------------------------
 // LoadTest.Client — drives load against the LoadTest.Silo to validate the
@@ -18,10 +20,16 @@ using Microsoft.Extensions.Logging;
 
 var options = LoadTestOptions.Parse(args);
 
+// Connection string for KurrentDB. The special host "kurrentemulator" selects the in-process,
+// in-memory Kurrent implementation so the load test runs without external infrastructure.
+// Point KURRENT_CONNECTION_STRING at a real KurrentDB instance to measure end-to-end performance.
+var connectionString = Environment.GetEnvironmentVariable("KURRENT_CONNECTION_STRING")
+                       ?? "esdb://kurrentemulator:2113?tls=false";
+
 var builder = Host.CreateApplicationBuilder(args);
 builder.Logging.AddFilter("Orleans", LogLevel.Warning);
 builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
-builder.UseOrleansClient(client => client.UseLocalhostClustering());
+builder.UseOrleansClient(client => client.UseKurrentClustering(x => x.ClientSettings = KurrentDBClientSettings.Create(connectionString)));
 
 using var host = builder.Build();
 await host.StartAsync();

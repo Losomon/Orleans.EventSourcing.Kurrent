@@ -128,7 +128,8 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
             var isSoftDeleted = metadata.Metadata.TruncateBefore is not null
                                 && metadata.Metadata.TruncateBefore == StreamPosition.End;
 
-            if (streamState != expectedRevision && !isSoftDeleted)
+            // StreamState.Any means "no optimistic-concurrency check": accept the append regardless of the current revision.
+            if (expectedRevision != StreamState.Any && streamState != expectedRevision && !isSoftDeleted)
             {
                 // mismatch and return with expectedRevision (since it didn't change)
                 return (ConditionalWriteResult)ConditionalWriteResultConstructor.Invoke([streamState, default, ConditionalWriteStatus.VersionMismatch,]);
@@ -232,8 +233,10 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
             var metadata = GetStreamMetadataCore(streamName);
             var currentRevision = StreamState.StreamRevision(all[events[^1]].EventNumber);
 
-            // Check if the stream revision is valid based on metadata truncation
-            if (currentRevision != expectedRevision
+            // StreamState.Any means "no optimistic-concurrency check": delete regardless of the current revision.
+            // Otherwise validate the revision, honoring metadata truncation.
+            if (expectedRevision != StreamState.Any
+                && currentRevision != expectedRevision
                 && (metadata.Metadata.TruncateBefore is null || all[events[^1]].EventNumber >= metadata.Metadata.TruncateBefore))
             {
                 // Revision mismatch, return a failed delete result
@@ -353,7 +356,9 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
             var metadata = GetStreamMetadataCore(streamName);
             var currentRevision = StreamState.StreamRevision(all[events[^1]].EventNumber);
 
-            if (currentRevision != expectedRevision
+            // StreamState.Any means "no optimistic-concurrency check": tombstone regardless of the current revision.
+            if (expectedRevision != StreamState.Any
+                && currentRevision != expectedRevision
                 && (metadata.Metadata.TruncateBefore is null || all[events[^1]].EventNumber >= metadata.Metadata.TruncateBefore))
             {
                 throw new WrongExpectedVersionException(streamName, expectedRevision, currentRevision);

@@ -1,15 +1,13 @@
 using Microsoft.Extensions.Options;
-
-using Orleans.Providers;
-
 using Orleans.EventSourcing.Kurrent.Configuration;
+using Orleans.Providers;
 
 namespace Orleans.EventSourcing.Kurrent.Hosting;
 
 /// <summary>
 /// Extension methods for configuring Kurrent storage in an Orleans silo.
 /// </summary>
-public static class KurrentStorageSiloBuilderExtensions
+public static class SiloBuilderExtensions
 {
     /// <summary>
     ///     Configures Kurrent as the default log consistency storage provider.
@@ -86,4 +84,23 @@ public static class KurrentStorageSiloBuilderExtensions
     /// <returns>The configured silo builder.</returns>
     public static ISiloBuilder AddKurrentBasedGrainStorageProvider(this ISiloBuilder builder, string name, Action<KurrentStorageOptions> configureOptions) 
        => builder.ConfigureServices(services => services.AddKurrentBasedStorageProvider(name, x => x.Configure(configureOptions)));
+
+
+    /// <summary>
+    /// Use Kurrent for Orleans clustering.
+    /// </summary>
+    /// <param name="siloBuilder">The silo builder.</param>
+    /// <param name="configureOptions">An optional action to configure the Kurrent clustering options.</param>
+    /// <returns>The updated silo builder.</returns>
+    public static ISiloBuilder UseKurrentClustering(this ISiloBuilder siloBuilder, Action<KurrentClusteringOptions> configureOptions)
+    => siloBuilder.UseKurrentClustering(x => x.Configure(configureOptions));
+
+    /// <summary>
+    /// Use Kurrent for Orleans clustering.
+    /// </summary>
+    /// <param name="siloBuilder">The silo builder.</param>
+    /// <param name="configureOptions">An optional action to configure the Kurrent clustering options.</param>
+    /// <returns>The updated silo builder.</returns>
+    public static ISiloBuilder UseKurrentClustering(this ISiloBuilder siloBuilder, Action<OptionsBuilder<KurrentClusteringOptions>> configureOptions)
+    => siloBuilder.ConfigureServices(services => services.AddKurrentBasedMembershipTable(configureOptions));
 }

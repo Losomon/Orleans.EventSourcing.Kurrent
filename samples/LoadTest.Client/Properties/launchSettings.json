@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "LoadTest.Client": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "KURRENT_CONNECTION_STRING": "esdb://localhost:2113?tls=false"
+      }
+    }
+  }
+}

@@ -1,28 +1,26 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-
 using Orleans.Configuration;
-using Orleans.EventSourcing;
+using Orleans.EventSourcing.Kurrent.Configuration;
+using Orleans.EventSourcing.Kurrent.LogConsistency;
+using Orleans.EventSourcing.Kurrent.Membership;
+using Orleans.EventSourcing.Kurrent.Projections;
+using Orleans.EventSourcing.Kurrent.Storage;
 using Orleans.Providers;
 using Orleans.Runtime.Hosting;
 using Orleans.Storage;
-
-using Orleans.EventSourcing.Kurrent.Configuration;
-using Orleans.EventSourcing.Kurrent.LogConsistency;
-using Orleans.EventSourcing.Kurrent.Projections;
-using Orleans.EventSourcing.Kurrent.Storage;
 
 namespace Orleans.EventSourcing.Kurrent.Hosting;
 
 /// <summary>
 /// </summary>
-public static class KurrentStorageServiceCollectionExtensions
+internal static class ServiceCollectionExtensions
 {
     /// <summary>
     ///     Configures Kurrent as a log consistency storage provider.
     /// </summary>
-    public static IServiceCollection AddKurrentBasedLogConsistencyProvider(this IServiceCollection services, string name, Action<OptionsBuilder<KurrentStorageOptions>>? configureOptions = null)
+    internal static IServiceCollection AddKurrentBasedLogConsistencyProvider(this IServiceCollection services, string name, Action<OptionsBuilder<KurrentStorageOptions>>? configureOptions = null)
     {
         AddKurrentBasedStorageCommon(services, name, configureOptions);
 
@@ -51,7 +49,7 @@ public static class KurrentStorageServiceCollectionExtensions
     /// <summary>
     ///     Configures Kurrent as a storage provider.
     /// </summary>
-    public static IServiceCollection AddKurrentBasedStorageProvider(this IServiceCollection services, string name, Action<OptionsBuilder<KurrentStorageOptions>>? configureOptions = null)
+    internal static IServiceCollection AddKurrentBasedStorageProvider(this IServiceCollection services, string name, Action<OptionsBuilder<KurrentStorageOptions>>? configureOptions = null)
     {
         AddKurrentBasedStorageCommon(services, name, configureOptions);
 
@@ -82,5 +80,14 @@ public static class KurrentStorageServiceCollectionExtensions
         services.TryAddKeyedSingleton(name, (sp, _) => KurrentClientFactory.Create(sp, name));
         services.TryAddKeyedSingleton(typeof(DefaultEventConverter<>), name, typeof(DefaultEventConverter<>));
         services.TryAddKeyedSingleton<IEventConverterFactory>(name, (serviceProvider, _) => ActivatorUtilities.CreateInstance<EventConverterFactory>(serviceProvider, name));
+    }
+
+    internal static void AddKurrentBasedMembershipTable(this IServiceCollection services, Action<OptionsBuilder<KurrentClusteringOptions>>? configureOptions = null)
+    {
+        configureOptions?.Invoke(services.AddOptions<KurrentClusteringOptions>());
+        services.TryAddTransient<IConfigurationValidator>(sp => new KurrentClusteringOptionsValidator(sp.GetRequiredService<IOptions<KurrentClusteringOptions>>().Value));
+        services.TryAddSingleton(KurrentClientFactory.Create);
+        services.TryAddSingleton(KurrentMembershipEventStorageFactory.Create);
+        services.TryAddSingleton<IMembershipTable, KurrentMembershipTable>();
     }
 }
