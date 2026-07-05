@@ -4,9 +4,6 @@ using System.Text;
 using KurrentDB.Client;
 
 using Microsoft.Extensions.Logging;
-
-using Orleans.EventSourcing;
-using Orleans.EventSourcing.Kurrent.Configuration;
 using Orleans.EventSourcing.Kurrent.Storage;
 
 namespace Orleans.EventSourcing.Kurrent.Tests

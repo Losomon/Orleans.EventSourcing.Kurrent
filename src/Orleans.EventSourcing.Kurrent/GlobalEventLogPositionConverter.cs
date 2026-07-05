@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Orleans.EventSourcing;
+namespace Orleans.EventSourcing.Kurrent;
 
 /// <inheritdoc/>
 internal sealed class GlobalEventLogPositionConverter : JsonConverter<GlobalEventLogPosition>

@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 using Orleans.Configuration;
 using Orleans.Messaging;
 
-namespace Orleans.EventSourcing.Kurrent.Membership;
+namespace Orleans.EventSourcing.Kurrent.Clustering;
 
 internal sealed class KurrentGatewayListProvider(KurrentMembershipTable table, IOptions<GatewayOptions> options) : IGatewayListProvider
 {

@@ -1,4 +1,4 @@
-﻿namespace Orleans.EventSourcing.Kurrent.Membership.Events;
+﻿namespace Orleans.EventSourcing.Kurrent.Clustering.Events;
 
 abstract record EventBase
 {

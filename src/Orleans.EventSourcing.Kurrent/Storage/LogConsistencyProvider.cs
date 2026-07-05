@@ -1,4 +1,3 @@
-using Orleans.EventSourcing;
 using Orleans.Storage;
 
 using Orleans.EventSourcing.Kurrent.Configuration;

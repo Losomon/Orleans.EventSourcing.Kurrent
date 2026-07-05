@@ -1,4 +1,4 @@
-﻿namespace Orleans.EventSourcing.Kurrent.Membership.Events;
+﻿namespace Orleans.EventSourcing.Kurrent.Clustering.Events;
 
 sealed record SiloAlive(SiloAddress SiloAddress, DateTime IAmAliveTime) : EventBase
 {

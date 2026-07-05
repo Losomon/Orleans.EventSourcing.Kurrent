@@ -1,7 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
 using System.Collections.Immutable;
 
-namespace Orleans.EventSourcing.Kurrent.Membership;
+namespace Orleans.EventSourcing.Kurrent.Clustering;
 
 sealed record ImmutableMembership(SiloAddress SiloAddress,
     SiloStatus Status, ImmutableDictionary<SiloAddress, DateTime> SuspectTimes,

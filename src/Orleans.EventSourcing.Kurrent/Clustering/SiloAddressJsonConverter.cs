@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Orleans.EventSourcing.Kurrent.Membership;
+namespace Orleans.EventSourcing.Kurrent.Clustering;
 
 /// <summary>
 ///     A <see cref="JsonConverter{T}" /> for <see cref="SiloAddress" /> that supports serializing a

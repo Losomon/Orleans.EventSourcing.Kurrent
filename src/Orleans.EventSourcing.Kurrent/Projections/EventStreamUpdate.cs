@@ -1,8 +1,3 @@
-using Orleans.EventSourcing;
-using Orleans.EventSourcing.Kurrent;
-using Orleans.EventSourcing.Kurrent.Projections;
-
-
 namespace Orleans.EventSourcing.Kurrent.Projections;
 
 /// <summary>

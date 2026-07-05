@@ -1,5 +1,3 @@
-using Orleans.EventSourcing;
-
 namespace Orleans.EventSourcing.Kurrent.Tests.Grains;
 
 [Alias("Orleans.EventSourcing.Kurrent.Tests.Grains.IUserGrain")]

@@ -4,9 +4,9 @@ using System.Text.Json;
 using KurrentDB.Client;
 using Microsoft.Extensions.Options;
 using Orleans.Configuration;
+using Orleans.EventSourcing.Kurrent.Clustering;
+using Orleans.EventSourcing.Kurrent.Clustering.Events;
 using Orleans.EventSourcing.Kurrent.Configuration;
-using Orleans.EventSourcing.Kurrent.Membership;
-using Orleans.EventSourcing.Kurrent.Membership.Events;
 using Orleans.EventSourcing.Kurrent.Storage;
 
 namespace Orleans.EventSourcing.Kurrent.Tests;

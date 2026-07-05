@@ -2,8 +2,8 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Orleans.EventSourcing.Kurrent.Clustering;
 using Orleans.EventSourcing.Kurrent.Configuration;
-using Orleans.EventSourcing.Kurrent.Membership;
 using Orleans.EventSourcing.Kurrent.Storage;
 using Orleans.Messaging;
 

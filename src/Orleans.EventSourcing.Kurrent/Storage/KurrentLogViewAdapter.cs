@@ -1,7 +1,6 @@
 using KurrentDB.Client;
-using Orleans.EventSourcing.Kurrent.Configuration;
 using Orleans.EventSourcing.Kurrent.Observability;
- 
+
 using Orleans.Storage;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;

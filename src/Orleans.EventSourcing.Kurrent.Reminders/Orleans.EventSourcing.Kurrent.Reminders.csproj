@@ -2,7 +2,7 @@
 		<PropertyGroup>
 			<PackageId>Orleans.EventSourcing.Kurrent.Reminders</PackageId>
 			<Authors>William Gunaratne</Authors>
-			<Title>Orleans Reminders Provider using Event-Sourcing</Title>
+			<Title>Kurrent Reminders Provider for Microsoft Orleans</Title>
 			<Description>An implementation of Orleans reminders using a JournaledGrain that implements IReminderTable.</Description>
 			<RootNamespace>Orleans.EventSourcing.Kurrent.Reminders</RootNamespace>
 			<AnalysisLevel>latest-all</AnalysisLevel>

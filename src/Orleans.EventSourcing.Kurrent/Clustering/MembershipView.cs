@@ -1,8 +1,7 @@
 using System.Collections.Immutable;
+using Orleans.EventSourcing.Kurrent.Clustering.Events;
 
-using Orleans.EventSourcing.Kurrent.Membership.Events;
-
-namespace Orleans.EventSourcing.Kurrent.Membership;
+namespace Orleans.EventSourcing.Kurrent.Clustering;
 
 // The materialized membership state as of a specific stream position.
 // It carries both halves of the Orleans optimistic-concurrency token: the domain Version

@@ -1,4 +1,4 @@
-﻿namespace Orleans.EventSourcing.Kurrent.Membership.Events;
+﻿namespace Orleans.EventSourcing.Kurrent.Clustering.Events;
 
 sealed record MembershipUpdate(ImmutableMembership Membership, int TableVersion) : EventBase
 {

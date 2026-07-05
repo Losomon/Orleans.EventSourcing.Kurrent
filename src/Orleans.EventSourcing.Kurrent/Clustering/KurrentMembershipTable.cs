@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.Options;
+using Orleans.EventSourcing.Kurrent.Clustering.Events;
 using Orleans.EventSourcing.Kurrent.Configuration;
-using Orleans.EventSourcing.Kurrent.Membership.Events;
 
-namespace Orleans.EventSourcing.Kurrent.Membership;
+namespace Orleans.EventSourcing.Kurrent.Clustering;
 
 internal sealed class KurrentMembershipTable(IOptions<KurrentClusteringOptions> options, KurrentMembershipEventStorage storage) : IMembershipTable
 {

@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-
 namespace Orleans.EventSourcing.Kurrent.Storage;
 
 /// <summary>

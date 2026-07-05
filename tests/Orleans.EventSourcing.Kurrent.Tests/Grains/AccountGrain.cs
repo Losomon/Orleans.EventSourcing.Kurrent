@@ -1,6 +1,3 @@
-using Orleans.EventSourcing;
-using Orleans.EventSourcing.Kurrent;
-
 namespace Orleans.EventSourcing.Kurrent.Tests.Grains
 {
     [GenerateSerializer]

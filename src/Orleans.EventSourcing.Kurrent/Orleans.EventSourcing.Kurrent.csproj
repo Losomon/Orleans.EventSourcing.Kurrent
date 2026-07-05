@@ -2,8 +2,8 @@
   <PropertyGroup>
     <PackageId>Orleans.EventSourcing.Kurrent</PackageId>
     <Authors>William Gunaratne</Authors>
-    <Title>Kurrent for Microsoft Orleans Event-Sourcing</Title>
-    <Description>Kurrent client implementation of log consistency provider for Microsoft Orleans EventSourcing.</Description>
+    <Title>Kurrent providers for Microsoft Orleans</Title>
+    <Description>Orleans clustering, state and event-sourcing providers for Kurrent</Description>
     <RootNamespace>Orleans.EventSourcing.Kurrent</RootNamespace>
     <AnalysisLevel>latest-all</AnalysisLevel>
 	<TreatWarningsAsErrors>true</TreatWarningsAsErrors>

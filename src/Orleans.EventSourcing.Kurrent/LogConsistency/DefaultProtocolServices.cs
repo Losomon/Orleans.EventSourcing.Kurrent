@@ -1,8 +1,6 @@
 using System.Globalization;
 
 using Microsoft.Extensions.Logging;
-
-using Orleans.EventSourcing;
 using Orleans.EventSourcing.Kurrent.Observability;
 using Orleans.Serialization;
 

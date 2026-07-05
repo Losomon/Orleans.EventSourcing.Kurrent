@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Orleans.EventSourcing;
+namespace Orleans.EventSourcing.Kurrent;
 
 /// <summary>
 /// A global position in an event-sourced log. 

@@ -1,6 +1,6 @@
 ﻿using System.Collections.Immutable;
 
-namespace Orleans.EventSourcing.Kurrent.Membership.Events;
+namespace Orleans.EventSourcing.Kurrent.Clustering.Events;
 
 sealed record MembershipTableSnapshot(ImmutableDictionary<SiloAddress, ImmutableMembership> Members, int TableVersion) : EventBase
 {

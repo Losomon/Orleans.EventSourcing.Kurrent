@@ -1,13 +1,13 @@
 ﻿using KurrentDB.Client;
 using Microsoft.Extensions.Options;
 using Orleans.Configuration;
+using Orleans.EventSourcing.Kurrent.Clustering.Events;
 using Orleans.EventSourcing.Kurrent.Configuration;
-using Orleans.EventSourcing.Kurrent.Membership.Events;
 using Orleans.EventSourcing.Kurrent.Storage;
 using System.Globalization;
 using System.Text.Json;
 
-namespace Orleans.EventSourcing.Kurrent.Membership;
+namespace Orleans.EventSourcing.Kurrent.Clustering;
 
 // Owns all persistence concerns for membership: Kurrent stream I/O, JSON serialization, stream naming,
 // and the translation between the Kurrent StreamState (the read cursor / optimistic-concurrency token)
