@@ -30,7 +30,7 @@ builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
 builder.UseOrleans(silo =>
 {
     silo.AddDashboard();
-    silo.UseKurrentClustering(o => { o.ClientSettings = clientSettings; o.EventCountBeforeSnapshots = 5; });
+    silo.UseKurrentClustering(o => { o.ClientSettings = clientSettings; o.EventCountBeforeSnapshot = 5; });
     //silo.UseLocalhostClustering();
     silo.AddKurrentBasedLogConsistencyProviderAsDefault(o =>
     {

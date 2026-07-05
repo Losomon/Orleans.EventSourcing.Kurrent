@@ -8,15 +8,22 @@ This project adds KurrentDB support to Microsoft Orleans.
 
 | Provider | Orleans interface | What it persists | When to use |
 | --- | --- | --- | --- |
+| **Cluster membership provider** (`UseKurrentClustering`) | `IMembershipTable` `IGatewayListProvider` | Cluster membership information | Use this to maintain cluster membership in KurrentDB. | 
 | **Log-consistency provider** (`AddKurrentBasedLogConsistencyProvider*`) | `ILogViewAdaptorFactory` for `JournaledGrain<TView, TEntry>` | The full **event log** for the grain — every `RaiseEvent` is appended to the grain's Kurrent stream. The view is rebuilt by replaying events. | Event-sourced grains (`JournaledGrain`). Gives you full history, projections via `IGrainEventProvider`, and replay. |
 | **Grain state storage provider** (`AddKurrentBasedGrainStorageProvider*`) | `IGrainStorage` for `Grain<TState>` / `[PersistentState]` | The **latest snapshot** only — each `WriteStateAsync` appends one event and Kurrent's `MaxCount = 1` stream metadata trims older revisions. | Regular Orleans state persistence when you want it backed by Kurrent (e.g. to keep all storage in one system) |
-| **Reminders provider** (`AddKurrentBasedReminderProvider*`) | `IReminderTable` | Grain Reminders | Use this provider to persist and manage Orleans reminders in KurrentDB. |
+| **Reminders provider** (`AddKurrentReminderService`) ⚠ experimental | `IReminderTable` | Grain Reminders | Use this provider to persist and manage Orleans reminders in KurrentDB. Installed from a separate package `Orleans.EventSourcing.Kurrent.Reminders`. |
 | **Grain event subscription** (`IGrainEventProvider`) ⚠ experimental | n/a | Read-side subscription to the Kurrent `$all` stream, filtered to the streams produced by the log-consistency provider. | Projections / read models built from grain events emitted via the log-consistency provider. |
 
 ## Install
 
 ```sh
 dotnet add package Orleans.EventSourcing.Kurrent
+```
+
+The reminders provider is shipped as a separate package:
+
+```sh
+dotnet add package Orleans.EventSourcing.Kurrent.Reminders
 ```
 
 Targets `net8.0` and `net10.0`. Requires Microsoft Orleans 10.x and a KurrentDB / EventStoreDB server.
@@ -36,6 +43,9 @@ var settings = KurrentDBClientSettings.Create("esdb://localhost:2113?tls=false")
 var builder = Host.CreateApplicationBuilder(args);
 builder.UseOrleans(silo =>
 {
+    // Clustering provider - supports the Orleans membership table implemented via events
+    silo.UseKurrentClustering(o => o.ClientSettings = settings);
+
     // Log-consistency provider — required for JournaledGrain<TView, TEntry>.
     silo.AddKurrentBasedLogConsistencyProviderAsDefault(o => o.ClientSettings = settings);
 
@@ -43,15 +53,55 @@ builder.UseOrleans(silo =>
     silo.AddKurrentBasedGrainStorageProviderAsDefault(o => o.ClientSettings = settings);
 
     // Reminders provider — if you want to persist Orleans reminders in Kurrent.
-    silo.AddKurrentBasedReminderProviderAsDefault(o => o.ClientSettings = settings);
+    silo.AddKurrentReminderService(o => o.ClientSettings = settings);
 });
 ```
 
-Both extensions also have non-default overloads that take a provider `name` so you can register multiple instances side-by-side.
+Configure the Orleans client to use the Kurrent Clustering provider:
+
+```csharp
+using KurrentDB.Client;
+using Orleans.EventSourcing.Kurrent.Hosting;
+
+var settings = KurrentDBClientSettings.Create("esdb://localhost:2113?tls=false");
+
+var builder = Host.CreateApplicationBuilder(args);
+builder.UseOrleansClient(client =>
+{
+    // Clustering provider - supports discovering silos by reading the cluster's event stream
+    client.UseKurrentClustering(o => o.ClientSettings = settings);
+});
+```
+
+The storage extensions also have non-default overloads that take a provider `name` so you can register multiple instances side-by-side.
+
+## Using the clustering provider
+
+The clustering provider implements `IMembershipTable` as an event-sourced aggregate, which materialises a `MembershipView` by reading
+the events stored in the cluster's event stream.
+
+The stream contains `MembershipUpdate` events written by silos as they join or when their status or suspect list changes. Silos also update their `IAmAlive` value every 30 seconds by default; these are recorded as `SiloAlive` events.
+
+In addition to removing defunct silos from the membership table, the interval configured for [ClusteringMembershipOptions.DefunctSiloCleanupPeriod](https://learn.microsoft.com/en-us/dotnet/api/orleans.configuration.clustermembershipoptions.defunctsilocleanupperiod?view=orleans-10.0#orleans-configuration-clustermembershipoptions-defunctsilocleanupperiod)
+is used to write a snapshot of the membership table and truncate the cluster's event stream. This prevents the stream length growing indefinitely and speeds-up recovery and discovery.
+
+### Configuring the clustering provider
+
+The clustering provider can be configured using the delegate supplied to `UseKurrentClustering` 
+
+Options available in `KurrentClusteringOptions` include:
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| ClientSettings | KurrentDBClientSettings | null | The KurrentDB client settings used to connect to the KurrentDB server. |
+| StreamPrefix | string | "Orleans.Cluster.Membership" | The prefix for the stream name used by the clustering provider. |
+| EventCountBeforeSnapshot | int | 5000 | The number of events to write before taking a snapshot of the membership table. |
 
 ## Using the log-consistency provider (event-sourced grains)
 
 Inherit from `JournaledGrain<TView, TEntry>`. Events are appended to a Kurrent stream per grain, and the view is rebuilt by replaying them.
+
+> **Note:** Grains replay all events from the stream on activation. For long-running grains, use `[DiscardPriorEvents]` on summary or snapshot events to bound replay cost.
 
 ```csharp
 public sealed class AccountGrain : JournaledGrain<AccountState, AccountEvent>, IAccountGrain
@@ -66,14 +116,13 @@ public sealed class AccountGrain : JournaledGrain<AccountState, AccountEvent>, I
 
 ### Truncating the event stream
 
-The provider supports truncating the event stream by using the `DiscardPriorEvents` attribute on an event type. 
+The provider supports truncating the event stream by using the `DiscardPriorEvents` attribute on an event type (`OEK0002` — suppress with `#pragma warning disable OEK0002` or `<NoWarn>$(NoWarn);OEK0002</NoWarn>`).
 
-When an event with this attribute is comitted, all prior events in the stream will be discarded.
+When an event with this attribute is committed, all prior events in the stream will be discarded.
 
-This can be used to write a tombstone event e.g. 'AccountClosed' or a summary event e.g. 'AccountBalance' 
+This can be used to write a tombstone event e.g. `AccountClosed` or a summary event e.g. `AccountBalance`:
 
 ```csharp
-
 [DiscardPriorEvents]
 [Alias("Account.Closed.V1")]
 public record AccountClosed(DateTime ClosedAt) : AccountEvent;
@@ -82,7 +131,7 @@ public sealed class AccountGrain : JournaledGrain<AccountState, AccountEvent>, I
 {
     public Task CloseAccount()
     {
-        RaiseEvent(new AccountEvent.AccountClosed(DateTime.UtcNow));
+        RaiseEvent(new AccountClosed(DateTime.UtcNow));
         return ConfirmEvents();
     }
 }
@@ -90,7 +139,7 @@ public sealed class AccountGrain : JournaledGrain<AccountState, AccountEvent>, I
 
 ### Deleting the event stream
 
-The log-consistency provider supports tombstoning the event stream using `JournalGrain.ClearLogAsync`, once deleted a stream cannot be reused in Kurrent.
+The log-consistency provider supports tombstoning the event stream using `JournaledGrain.ClearLogAsync`, once deleted a stream cannot be reused in Kurrent.
 The state-based provider supports soft deleting the stream using `Grain<TState>.ClearStateAsync`, which will delete the stream and allow it to be reused in Kurrent.
 
 ### Subscribing to grain events (projections)
@@ -105,14 +154,17 @@ await foreach (var update in eventProvider.SubscribeToGrainEvents<IAccountGrain,
 {
     switch (update)
     {
-        case EventStreamUpdate.GrainEvent<AccountEvent> e:
-            // project e.Event for e.GrainId at e.Version
+        case GrainEvent<AccountEvent> e:
+            // project e.Event for e.EventGrainId at e.EventGrainVersion
             break;
-        case EventStreamUpdate.Checkpoint cp:
+        case Checkpoint cp:
             // persist cp.Position so the next subscription resumes from here
             break;
-        case EventStreamUpdate.CaughtUp:
+        case CaughtUp:
             // subscription is now live
+            break;
+        case FallenBehind:
+            // subscription is lagging behind the live tail
             break;
     }
 }
@@ -145,13 +197,30 @@ This provider does **not** keep event history — if you need history, use the l
 
 ## Reminders provider
 
-The reminders provider records Orleans reminder upserts and removals as discrete events in KurrentDB via a JournaledGrain implementing the Orleans `IReminderTable` interface. 
+The reminders provider is shipped as a **separate package**:
+
+```sh
+dotnet add package Orleans.EventSourcing.Kurrent.Reminders
+```
+
+It records Orleans reminder upserts and removals as discrete events in KurrentDB via a `JournaledGrain` implementing `IReminderTable`.
+
+Register it on the silo:
+
+```csharp
+using Orleans.EventSourcing.Kurrent.Reminders;
+
+builder.UseOrleans(silo =>
+{
+    silo.AddKurrentReminderService(o => o.ClientSettings = settings);
+});
+```
 
 Reminders are persisted to a single stream. If you have high reminder churn, the stream will become large and it will take time to read the entire stream on startup.
 
 ## Configuration
 
-`KurrentStorageOptions` is configured per provider name. The same options type is used by both providers; configuring one named instance does not affect the other.
+`KurrentStorageOptions` is configured per provider name. The same options type is used by both storage providers; configuring one named instance does not affect the other.
 
 | Property | Description |
 | --- | --- |
@@ -161,7 +230,7 @@ Reminders are persisted to a single stream. If you have high reminder churn, the
 
 ### Custom event stream naming
 
-By default each grain's stream is named `{GrainType}-{Key}` (log-consistency) or `{GrainType}-{stateName}|{Key}` (state storage). The naming scheme is pluggable — see [Custom stream naming](#custom-stream-naming).
+The naming scheme is pluggable — see [Custom event stream naming](#custom-event-stream-naming).
 
 Both providers, and the projection subscription, route through `IKurrentStreamNameProvider`. The default produces:
 
@@ -215,7 +284,7 @@ e.g. `IGrainEventProvider.SubscribeToGrainEvents<EventEnvelope<T>>` and `Journal
 
 You can mix-and-match `EventEnvelope<T>` with `T` as needed within the same silo, as the serializer will handle both cases.
 
-When you use `EventEnvelope<T>` a different `IEventConverter` is used which reads and writes the properites of the `EventEnvelope` into the appropriate Kurrent fields.
+When you use `EventEnvelope<T>` a different `IEventConverter` is used which reads and writes the properties of the `EventEnvelope` into the appropriate Kurrent fields.
 
 * EventId property, which you can set if you want control over the eventId written to KurrentDB, or read from the event when replaying.
 * Metadata dictionary, which is persisted to KurrentDB and can be used to store additional information about the event that doesn't fit into the event payload. This can be useful for things like correlation ids, causation ids, or any other contextual information you want to associate with the event.
@@ -224,7 +293,7 @@ When you use `EventEnvelope<T>` a different `IEventConverter` is used which read
 
 - The storage provider's delete operations are mapped to Kurrent soft-deletes - Kurrent retains the last event in a stream in the $all stream.
 - `IGrainEventProvider` subscriptions only observe streams written by the log-consistency provider; state-storage snapshot writes are not exposed.
-- Read-optimisation snapshots are not supported, an event sourced grain will load all events on activation. Business snapshots are supported using events marked with `DiscardPriorEventsAttribute`
+- Read-optimisation snapshots are not supported; an event-sourced grain will replay all events on activation. Business snapshots are supported using events marked with `[DiscardPriorEvents]`.
 
 ## Versioning
 
@@ -236,7 +305,7 @@ Some surface is annotated with `[Experimental("OEK…")]` and will produce a com
 
 | Diagnostic | API | Purpose |
 | --- | --- | --- |
-| `OEK0001` | `IGrainEventProvider` | An interface available via dependency-injection to for grains hosting projections or side-effects to read grain events |
+| `OEK0001` | `IGrainEventProvider` | An interface available via dependency injection for grains hosting projections or side-effects to read grain events |
 | `OEK0002` | `DiscardPriorEventsAttribute`  | An attribute to tell the storage provider to delete events prior to this event |
 
 ## License

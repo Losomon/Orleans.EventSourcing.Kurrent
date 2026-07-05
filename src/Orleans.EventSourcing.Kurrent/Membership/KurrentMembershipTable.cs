@@ -58,7 +58,7 @@ internal sealed class KurrentMembershipTable(IOptions<KurrentClusteringOptions> 
         var refreshed = await storage.RefreshState(current).ConfigureAwait(false);
         current = refreshed;
 
-        if (refreshed.UpdateIAmAlive(entry, options.Value.EventCountBeforeSnapshots) is { } emittedEvent)
+        if (refreshed.UpdateIAmAlive(entry, options.Value.EventCountBeforeSnapshot) is { } emittedEvent)
         {
             current = await storage.Write(refreshed, emittedEvent).ConfigureAwait(true);
         }
@@ -69,7 +69,7 @@ internal sealed class KurrentMembershipTable(IOptions<KurrentClusteringOptions> 
         var refreshed = await storage.RefreshState(current).ConfigureAwait(false);
         current = refreshed;
 
-        if (refreshed.CleanUpDefunctEntries(beforeDate, options.Value.EventCountBeforeSnapshots) is { } emittedEvent)
+        if (refreshed.CleanUpDefunctEntries(beforeDate, options.Value.EventCountBeforeSnapshot) is { } emittedEvent)
         {
             current = await storage.Write(refreshed, emittedEvent).ConfigureAwait(true);
         } 

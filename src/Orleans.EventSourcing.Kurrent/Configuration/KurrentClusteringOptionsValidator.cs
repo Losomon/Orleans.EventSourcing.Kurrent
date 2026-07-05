@@ -12,9 +12,9 @@ internal sealed class KurrentClusteringOptionsValidator(KurrentClusteringOptions
             throw new OrleansConfigurationException($"Invalid configuration for {nameof(KurrentClusteringOptions)}. {nameof(KurrentClusteringOptions)}.{nameof(_options.ClientSettings)} is required.");
         }
 
-        if (_options.EventCountBeforeSnapshots <= 0) 
+        if (_options.EventCountBeforeSnapshot <= 0) 
         {
-            throw new OrleansConfigurationException($"Invalid configuration for {nameof(KurrentClusteringOptions)}. {nameof(KurrentClusteringOptions)}.{nameof(_options.EventCountBeforeSnapshots)} must be greater than zero.");
+            throw new OrleansConfigurationException($"Invalid configuration for {nameof(KurrentClusteringOptions)}. {nameof(KurrentClusteringOptions)}.{nameof(_options.EventCountBeforeSnapshot)} must be greater than zero.");
         }
 
         if (string.IsNullOrWhiteSpace(_options.StreamPrefix))
