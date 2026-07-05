@@ -43,6 +43,9 @@ jobs:
 
       - name: Pack
         run: dotnet pack src/Orleans.EventSourcing.Kurrent/Orleans.EventSourcing.Kurrent.csproj --configuration Release --no-build --output ${{ github.workspace }}/artifacts
+      
+      - name: Pack
+        run: dotnet pack src/Orleans.EventSourcing.Kurrent/Orleans.EventSourcing.Kurrent.Reminders.csproj --configuration Release --no-build --output ${{ github.workspace }}/artifacts
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
