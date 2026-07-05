@@ -49,7 +49,7 @@ public sealed class MembershipTableTests
             RoleName = "test",
             ProxyPort = address.Endpoint.Port,
             StartTime = startTime ?? DateTime.UtcNow,
-            IAmAliveTime = DateTime.UtcNow,
+            IAmAliveTime = startTime ?? DateTime.UtcNow,
             SuspectTimes = []
         };
 
