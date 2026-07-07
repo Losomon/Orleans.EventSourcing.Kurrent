@@ -37,6 +37,7 @@ Pick whichever providers you need — they are configured separately and can use
 ```csharp
 using KurrentDB.Client;
 using Orleans.EventSourcing.Kurrent.Hosting;
+using Orleans.EventSourcing.Kurrent.Reminders;
 
 var settings = KurrentDBClientSettings.Create("esdb://localhost:2113?tls=false");
 
@@ -83,7 +84,7 @@ the events stored in the cluster's event stream.
 The stream contains `MembershipUpdate` events written by silos as they join or when their status or suspect list changes. Silos also update their `IAmAlive` value every 30 seconds by default; these are recorded as `SiloAlive` events.
 
 In addition to removing defunct silos from the membership table, the interval configured for [ClusteringMembershipOptions.DefunctSiloCleanupPeriod](https://learn.microsoft.com/en-us/dotnet/api/orleans.configuration.clustermembershipoptions.defunctsilocleanupperiod?view=orleans-10.0#orleans-configuration-clustermembershipoptions-defunctsilocleanupperiod)
-is used to write a snapshot of the membership table and truncate the cluster's event stream. This prevents the stream length growing indefinitely and speeds-up recovery and discovery.
+may be used to write a snapshot of the membership table and truncate the cluster's event stream. This prevents the stream length growing indefinitely and ensures recovery and discovery complete in a reasonable amount of time.
 
 ### Configuring the clustering provider
 
@@ -114,7 +115,7 @@ public sealed class AccountGrain : JournaledGrain<AccountState, AccountEvent>, I
 }
 ```
 
-### Truncating the event stream
+### Truncating the event stream - Experimental
 
 The provider supports truncating the event stream by using the `DiscardPriorEvents` attribute on an event type (`OEK0002` — suppress with `#pragma warning disable OEK0002` or `<NoWarn>$(NoWarn);OEK0002</NoWarn>`).
 
@@ -139,12 +140,15 @@ public sealed class AccountGrain : JournaledGrain<AccountState, AccountEvent>, I
 
 ### Deleting the event stream
 
-The log-consistency provider supports tombstoning the event stream using `JournaledGrain.ClearLogAsync`, once deleted a stream cannot be reused in Kurrent.
-The state-based provider supports soft deleting the stream using `Grain<TState>.ClearStateAsync`, which will delete the stream and allow it to be reused in Kurrent.
+The log-consistency provider [tombstones](https://docs.kurrent.io/clients/python/v1.2/delete-stream.html#tombstone-stream) the event stream using `JournaledGrain.ClearLogAsync`.
 
-### Subscribing to grain events (projections)
+> **Note:** Once tombstoned a stream cannot be reused in Kurrent. To truncate the stream use the `DiscardPriorEvents` attribute instead.
 
-Resolve `IGrainEventProvider` from the silo container and call one of the `SubscribeToGrainEvents*` overloads. This reads the Kurrent `$all` stream filtered to streams written by the log-consistency provider, deserializes each event, and yields it together with the originating `GrainId` and version:
+The state-based provider [soft deletes](https://docs.kurrent.io/clients/python/v1.2/delete-stream.html#delete-stream) the stream using `Grain<TState>.ClearStateAsync`, which will delete the stream and allow it to be reused in Kurrent.
+
+### Subscribing to grain events (projections) - Experimental
+
+Resolve `IGrainEventProvider` from the silo container (`OEK0001` — suppress with `#pragma warning disable OEK0001` or `<NoWarn>$(NoWarn);OEK0001</NoWarn>`) and call one of the `SubscribeToGrainEvents*` overloads. This reads the Kurrent `$all` stream filtered to streams written by the log-consistency provider, deserializes each event, and yields it together with the originating `GrainId` and version:
 
 ```csharp
 await foreach (var update in eventProvider.SubscribeToGrainEvents<IAccountGrain, AccountEvent>(
@@ -190,10 +194,6 @@ public sealed class SettingsGrain(
     }
 }
 ```
-
-`ClearStateAsync` issues a Kurrent **soft-delete** of the stream (no tombstone event is written).
-
-This provider does **not** keep event history — if you need history, use the log-consistency provider instead.
 
 ## Reminders provider
 
@@ -263,8 +263,6 @@ The default serializers (`DefaultEventSerializer<T>` and `EventEnvelopeSerialize
 Implications:
 
 - **`[Alias]` is the stable contract** between your app and Kurrent. Renaming or moving an event type without an `[Alias]` will break replay because previously written `EventType` strings will no longer resolve. Always add `[Alias]` to event records you persist.
-- **The same alias is used on read.** `DeserializeEvent` calls `TypeConverter.Parse(EventType)` to resolve the alias back to a CLR type, so the type must still be reachable in the silo's loaded assemblies under that alias.
-- **Projection subscriptions filter by alias.** `IGrainEventProvider.SubscribeToGrainEvents<T>(..., types, ...)` resolves each requested CLR type to its alias via the same `TypeConverter`, then asks Kurrent for events whose `EventType` matches. Event types without an `[Alias]` will still work but couple your subscribers to the assembly-qualified name and break on type rename or relocation.
 - **Aliases must be unique** across the silo's serialization graph; this is an Orleans-wide constraint, not specific to this package.
 
 ```csharp
@@ -274,7 +272,6 @@ public sealed record Deposited(decimal Amount);
 ```
 
 If you need a different encoding (e.g., a versioned namespace scheme, JSON envelope with a discriminator, or interop with a non-Orleans producer), implement `IEventSerializer<TLogEntry>` and register it via DI before the provider, or supply your own through `KurrentStorageOptions`.
-
 
 ## Accessing EventId and Event Metadata
 
@@ -291,9 +288,7 @@ When you use `EventEnvelope<T>` a different `IEventConverter` is used which read
 
 ## Notes & limitations
 
-- The storage provider's delete operations are mapped to Kurrent soft-deletes - Kurrent retains the last event in a stream in the $all stream.
-- `IGrainEventProvider` subscriptions only observe streams written by the log-consistency provider; state-storage snapshot writes are not exposed.
-- Read-optimisation snapshots are not supported; an event-sourced grain will replay all events on activation. Business snapshots are supported using events marked with `[DiscardPriorEvents]`.
+- Read-optimisation snapshots are not yet supported; an event-sourced grain will replay all events on activation. Business snapshots are supported using events marked with `[DiscardPriorEvents]`.
 
 ## Versioning
 

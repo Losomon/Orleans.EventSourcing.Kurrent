@@ -3,7 +3,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="KurrentDB.Client" Version="1.4.0" />
+    <PackageVersion Include="KurrentDB.Client" Version="1.2.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
 	<PackageVersion Include="Microsoft.Orleans.Dashboard" Version="10.1.0" />
     <PackageVersion Include="Microsoft.Orleans.EventSourcing" Version="10.1.0" />
