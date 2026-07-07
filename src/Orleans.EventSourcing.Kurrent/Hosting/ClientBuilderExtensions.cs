@@ -36,7 +36,6 @@ public static class ClientBuilderExtensions
             services.TryAddTransient<IConfigurationValidator>(sp => new KurrentClusteringOptionsValidator(sp.GetRequiredService<IOptions<KurrentClusteringOptions>>().Value));
             services.TryAddSingleton(sp => KurrentClientFactory.Create(sp));
             services.TryAddSingleton(KurrentMembershipEventStorageFactory.Create);
-            services.TryAddSingleton<KurrentMembershipTable>();
             services.TryAddSingleton<IGatewayListProvider, KurrentGatewayListProvider>();
         });
 }

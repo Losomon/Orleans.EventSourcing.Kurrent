@@ -5,10 +5,11 @@ using Orleans.Messaging;
 
 namespace Orleans.EventSourcing.Kurrent.Clustering;
 
-internal sealed class KurrentGatewayListProvider(KurrentMembershipTable table, IOptions<GatewayOptions> options) : IGatewayListProvider
+internal sealed class KurrentGatewayListProvider(KurrentMembershipEventStorage storage, IOptions<GatewayOptions> options) : IGatewayListProvider
 {
-    private readonly KurrentMembershipTable _table = table;
+    private readonly KurrentMembershipEventStorage _storage = storage;
     private readonly GatewayOptions _gatewayOptions = options.Value;
+    private MembershipView _membershipView = storage.InitialView;
 
     public TimeSpan MaxStaleness => _gatewayOptions.GatewayListRefreshPeriod;
 
@@ -16,19 +17,16 @@ internal sealed class KurrentGatewayListProvider(KurrentMembershipTable table, I
 
     public async Task<IList<Uri>> GetGateways()
     {
-        var all = await _table.ReadAll().ConfigureAwait(true);
-        var result = all.Members
-           .Where(x => x.Item1.Status == SiloStatus.Active && x.Item1.ProxyPort != 0)
+        _membershipView = await _storage.RefreshState(_membershipView).ConfigureAwait(true);
+        var result = _membershipView.Members
+           .Where(x => x.Value.Status == SiloStatus.Active && x.Value.ProxyPort != 0)
            .Select(x =>
            {
-               var entry = x.Item1;
-               return SiloAddress.New(entry.SiloAddress.Endpoint.Address, entry.ProxyPort, entry.SiloAddress.Generation).ToGatewayUri();
+               var entry = x.Key;
+               return SiloAddress.New(entry.Endpoint.Address, x.Value.ProxyPort, entry.Generation).ToGatewayUri();
            }).ToList();
         return result;
     }
 
-    public async Task InitializeGatewayListProvider()
-    {
-        await _table.InitializeMembershipTable(true).ConfigureAwait(true); ;
-    }
+    public Task InitializeGatewayListProvider() => Task.CompletedTask;
 }

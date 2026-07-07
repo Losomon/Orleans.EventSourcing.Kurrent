@@ -11,7 +11,7 @@ using Orleans.EventSourcing.Kurrent.Reminders;
 // in-memory Kurrent implementation so the load test runs without external infrastructure.
 // Point KURRENT_CONNECTION_STRING at a real KurrentDB instance to measure end-to-end performance.
 var connectionString = Environment.GetEnvironmentVariable("KURRENT_CONNECTION_STRING")
-                       ?? "esdb://kurrentemulator:2113?tls=false";
+                       ?? "esdb://localhost:2113?tls=false";
 
 // GRAIN_SERIALIZER selects the event payload serializer for the log-consistency provider:
 //   "orleans" (default) — Orleans binary serializer
@@ -22,13 +22,14 @@ var serializerName = (Environment.GetEnvironmentVariable("GRAIN_SERIALIZER") ?? 
 
 var clientSettings = KurrentDBClientSettings.Create(connectionString);
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = Host.CreateApplicationBuilder(args);
 
 builder.Logging.AddFilter("Orleans", LogLevel.Warning);
 builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
 
 builder.UseOrleans(silo =>
 {
+    silo.ConfigureEndpoints(Random.Shared.Next(29170, 29998), Random.Shared.Next(29170, 29998));
     silo.AddDashboard();
     silo.UseKurrentClustering(o => { o.ClientSettings = clientSettings; o.EventCountBeforeSnapshot = 5; });
     //silo.UseLocalhostClustering();
@@ -44,8 +45,6 @@ builder.UseOrleans(silo =>
 });
 
 var host = builder.Build();
-
-host.MapOrleansDashboard();
 
 Console.WriteLine($"LoadTest silo starting (Kurrent: {connectionString}, serializer: {serializerName})...");
 await host.StartAsync();

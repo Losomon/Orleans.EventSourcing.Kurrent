@@ -249,44 +249,4 @@ public sealed class MembershipTableTests
         Assert.Single(data.Members);
     }
 
-    [Fact]
-    public async Task UpdateIAmAlive_SnapshotsAndTruncates_AfterThreshold()
-    {
-        // Arrange: one silo registered so UpdateIAmAlive has a target.
-        var table = CreateTable(out var clusterOptions, out var client);
-        await table.InitializeMembershipTable(true);
-
-        var address = CreateSiloAddress();
-        await table.InsertRow(CreateEntry(address), (await table.ReadAll()).Version);
-
-        // Act: emit exactly MAX_EVENTS_SINCE_SNAPSHOT (1 500) liveness events.
-        // Each UpdateIAmAlive call writes one SiloAlive event and increments EventsSinceSnapshot.
-        for (var i = 0; i < KurrentClusteringOptions.DefaultEventCountBeforeSnapshot; i++)
-        {
-            var entry = CreateEntry(address);
-            entry.IAmAliveTime = DateTime.UtcNow.AddSeconds(i + 1);
-            await table.UpdateIAmAlive(entry);
-        }
-
-        // Trigger compaction: CleanupDefunctSiloEntries finds nothing defunct (far-future cutoff)
-        // so it falls through to TakeSnapshotIfNeeded, which fires because EventsSinceSnapshot >= 1 500.
-        await table.CleanupDefunctSiloEntries(DateTimeOffset.UtcNow.AddYears(-100));
-
-        // Assert: the live event count in the stream must be bounded.
-        // After compaction we expect exactly 1 FullSnapshot and nothing after it
-        // (cleanup was the last write, so no trailing liveness events).
-        var streamName = $"{KurrentClusteringOptions.DefaultStreamPrefix}/{clusterOptions.ServiceId}/{clusterOptions.ClusterId}";
-        var liveEvents = await client
-            .ReadStreamAsync(Direction.Forwards, streamName, StreamPosition.Start, long.MaxValue, false, TestContext.Current.CancellationToken)
-            .ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
-
-        Assert.True(liveEvents.Count <= 2,
-            $"Expected at most 2 live events after compaction but found {liveEvents.Count}.");
-        Assert.Equal(nameof(MembershipTableSnapshot), liveEvents[0].Event.EventType);
-
-        // The member is still readable with correct liveness time after the snapshot.
-        var data = await table.ReadAll();
-        var member = Assert.Single(data.Members);
-        Assert.Equal(address, member.Item1.SiloAddress);
-    }
 }

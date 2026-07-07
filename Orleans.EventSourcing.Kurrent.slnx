@@ -17,8 +17,11 @@
     <Project Path="tests/Orleans.EventSourcing.Kurrent.Tests/Orleans.EventSourcing.Kurrent.Tests.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="LoadTest.Dashboard/LoadTest.Dashboard.csproj" Id="732a0c1b-0c5a-4870-aa44-20219cbe65c7">
+      <Build Solution="Debug|*" Project="false" />
+    </Project>
+    <Project Path="samples/LoadTest.Client/LoadTest.Client.csproj" />
     <Project Path="samples/LoadTest.Grains/LoadTest.Grains.csproj" />
     <Project Path="samples/LoadTest.Silo/LoadTest.Silo.csproj" />
-    <Project Path="samples/LoadTest.Client/LoadTest.Client.csproj" />
   </Folder>
 </Solution>

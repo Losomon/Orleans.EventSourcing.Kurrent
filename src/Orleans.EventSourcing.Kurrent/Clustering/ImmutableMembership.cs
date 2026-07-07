@@ -19,7 +19,7 @@ sealed record ImmutableMembership(SiloAddress SiloAddress,
     => new(
         entry.SiloAddress,
         entry.Status,
-        entry.SuspectTimes.ToImmutableDictionary(x=>x.Item1, x=>x.Item2),
+        entry.SuspectTimes.ToImmutableDictionary(x => x.Item1, x => x.Item2),
         entry.ProxyPort,
         entry.HostName,
         entry.SiloName,

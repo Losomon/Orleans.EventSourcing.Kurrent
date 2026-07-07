@@ -24,7 +24,7 @@ var options = LoadTestOptions.Parse(args);
 // in-memory Kurrent implementation so the load test runs without external infrastructure.
 // Point KURRENT_CONNECTION_STRING at a real KurrentDB instance to measure end-to-end performance.
 var connectionString = Environment.GetEnvironmentVariable("KURRENT_CONNECTION_STRING")
-                       ?? "esdb://kurrentemulator:2113?tls=false";
+                       ?? "esdb://localhost:2113?tls=false";
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Logging.AddFilter("Orleans", LogLevel.Warning);

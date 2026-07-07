@@ -76,10 +76,14 @@ builder.UseOrleansClient(client =>
 
 The storage extensions also have non-default overloads that take a provider `name` so you can register multiple instances side-by-side.
 
+To run KurrentDB locally (running **insecure** for testing only):
+```sh
+docker run --name kurrentdb-node -it -p 2113:2113 docker.kurrent.io/kurrent-latest/kurrentdb:latest --insecure
+```
+
 ## Using the clustering provider
 
-The clustering provider implements `IMembershipTable` as an event-sourced aggregate, which materialises a `MembershipView` by reading
-the events stored in the cluster's event stream.
+The clustering provider event-sources the orleans `IMembershipTable` and by writing membership events to the cluster's event stream.
 
 The stream contains `MembershipUpdate` events written by silos as they join or when their status or suspect list changes. Silos also update their `IAmAlive` value every 30 seconds by default; these are recorded as `SiloAlive` events.
 

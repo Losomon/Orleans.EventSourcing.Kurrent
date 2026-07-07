@@ -29,78 +29,87 @@ internal sealed record MembershipView
 
     // Fold a liveness event into the view.
     internal MembershipView Apply(SiloAlive wasAliveEvent)
-    {
-        if (Members.TryGetValue(wasAliveEvent.SiloAddress, out var entry)
-            && wasAliveEvent.IAmAliveTime > entry.IAmAliveTime)
-        {
-            return this with
-            {
-                Members = Members.SetItem(wasAliveEvent.SiloAddress, entry with { IAmAliveTime = wasAliveEvent.IAmAliveTime }),
-                EventsSinceSnapshot = EventsSinceSnapshot + 1
-            };
-        }
+    => Members.TryGetValue(wasAliveEvent.SiloAddress, out var entry)
+           ? this with
+           {
+               Members = Members.SetItem(wasAliveEvent.SiloAddress, entry with { IAmAliveTime = wasAliveEvent.IAmAliveTime }),
+               EventsSinceSnapshot = EventsSinceSnapshot + 1
+           }
+           : this;
 
-        return this;
-    }
 
     // A snapshot is a full checkpoint: it replaces the members and version wholesale while keeping the current ETag,
     // which storage overwrites with the actual stream position after the read/write completes.
     internal MembershipView Apply(MembershipTableSnapshot snapshotEvent)
-        => this with { Members = snapshotEvent.Members, 
-                       Version = snapshotEvent.TableVersion, 
-                       EventsSinceSnapshot = 0 };
+        => this with { Members = snapshotEvent.Members,
+            Version = snapshotEvent.TableVersion,
+            EventsSinceSnapshot = 0 };
 
-    // a single membership entry upsert
-    internal MembershipView Apply(MembershipUpdate membershipUpdateEvent)
-        => this with { Members = Members.SetItem(membershipUpdateEvent.Membership.SiloAddress, membershipUpdateEvent.Membership), 
-                       Version = membershipUpdateEvent.TableVersion, 
-                       EventsSinceSnapshot = EventsSinceSnapshot + 1 };
+    internal MembershipView Apply(SiloAdded siloAdded)
+       => this with
+       {
+           Members = Members.Add(siloAdded.Membership.SiloAddress, siloAdded.Membership),
+           Version = siloAdded.TableVersion,
+           EventsSinceSnapshot = EventsSinceSnapshot + 1
+       };
 
-    internal EventBase? UpdateRow(MembershipEntry entry, string etag, int tableVersion)
+    internal MembershipView Apply(SiloStateUpdated siloUpdated)
+     => this with
+     {
+         Members = Members.SetItem(siloUpdated.SiloAddress, Members[siloUpdated.SiloAddress] with { SuspectTimes = siloUpdated.SuspectTimes, Status = siloUpdated.Status }),
+         Version = siloUpdated.TableVersion,
+         EventsSinceSnapshot = EventsSinceSnapshot + 1
+     };
+
+    internal IEnumerable<EventBase> UpdateRow(MembershipEntry entry, string etag, int tableVersion)
     {
         if (!Members.TryGetValue(entry.SiloAddress, out var existingEntry)
             || existingEntry.ETag != etag)
         {
-            return null;
+            yield break;
         }
 
-        return new MembershipUpdate(ImmutableMembership.FromMembershipEntry(entry), tableVersion);
+        yield return new SiloStateUpdated(entry.SiloAddress, entry.Status, entry.SuspectTimes.ToImmutableDictionary(x => x.Item1, x => x.Item2), tableVersion);
     }
 
-    internal EventBase? InsertRow(MembershipEntry entry, int tableVersion)
+    internal IEnumerable<EventBase> InsertRow(MembershipEntry entry, int tableVersion)
     {
         if (Members.ContainsKey(entry.SiloAddress))
         {
-            return null;
+            yield break;
         }
 
-        return new MembershipUpdate(ImmutableMembership.FromMembershipEntry(entry), tableVersion);
+        yield return new SiloAdded(ImmutableMembership.FromMembershipEntry(entry), tableVersion);
     }
 
-    internal EventBase? UpdateIAmAlive(MembershipEntry updateEntry, int eventsBeforeSnapshot)
-    { 
-        if (!Members.TryGetValue(updateEntry.SiloAddress, out var entry))
+    internal SiloAlive? UpdateIAmAlive(MembershipEntry updateEntry)
+    {
+        if (!Members.TryGetValue(updateEntry.SiloAddress, out var entry)
+            || entry.IAmAliveTime > updateEntry.IAmAliveTime)
         {
             return null;
         }
 
-        return new SiloAlive(entry.SiloAddress, updateEntry.IAmAliveTime); 
+        return new SiloAlive(entry.SiloAddress, updateEntry.IAmAliveTime);
     }
-    internal EventBase? CleanUpDefunctEntries(DateTimeOffset beforeDate, int eventsBeforeSnapshot)
+    internal MembershipTableSnapshot? CleanUpDefunctEntries(DateTimeOffset beforeDate, int eventsBeforeSnapshot)
     {
         var remaining = Members;
 
         foreach (var item in Members)
         {
-            if (item.Value.Status != SiloStatus.Active && 
+            if (item.Value.Status != SiloStatus.Active &&
                 new DateTime(Math.Max(item.Value.IAmAliveTime.Ticks, item.Value.StartTime.Ticks), DateTimeKind.Utc) < beforeDate)
             {
                 remaining = remaining.Remove(item.Key);
             }
         }
 
-        return ReferenceEquals(remaining, Members) && EventsSinceSnapshot < eventsBeforeSnapshot
-            ? null
-            : new MembershipTableSnapshot(remaining, Version);
-    } 
+        if (ReferenceEquals(remaining, Members) && EventsSinceSnapshot < eventsBeforeSnapshot)
+        {
+            return null;
+        }
+
+        return new MembershipTableSnapshot(remaining, Version);
+    }
 }
