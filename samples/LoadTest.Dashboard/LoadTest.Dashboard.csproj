@@ -14,7 +14,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\src\Orleans.EventSourcing.Kurrent\Orleans.EventSourcing.Kurrent.csproj" />
+	  <ProjectReference Include="..\..\src\Orleans.EventSourcing.Kurrent\Orleans.EventSourcing.Kurrent.csproj" />
 	</ItemGroup>
 	
 </Project>
