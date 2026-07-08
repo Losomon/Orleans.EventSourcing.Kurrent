@@ -20,7 +20,7 @@ namespace Orleans.EventSourcing.Kurrent.Storage;
 {
     private readonly IGrainStorageSerializer _storageSerializer;
     private readonly TypeConverter _typeConverter;
-    private readonly Type eventType = typeof(TEvent);
+
 
     public EventEnvelopeConveter(KurrentStorageOptions storageOptions, TypeConverter typeConverter)
     {
@@ -37,6 +37,7 @@ namespace Orleans.EventSourcing.Kurrent.Storage;
 
         ReadOnlyMemory<byte>? metadata = null;
 
+        var eventType = entry.Event.GetType();
         var entryData = _storageSerializer.Serialize(eventType, entry.Event);
         var eventUuid = Uuid.FromGuid(entry.EventId);
 
