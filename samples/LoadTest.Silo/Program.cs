@@ -1,6 +1,5 @@
 using KurrentDB.Client;
 using LoadTest.Silo;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Orleans.Dashboard;
@@ -31,7 +30,7 @@ builder.UseOrleans(silo =>
 {
     silo.ConfigureEndpoints(Random.Shared.Next(29170, 29998), Random.Shared.Next(29170, 29998));
     silo.AddDashboard();
-    silo.UseKurrentClustering(o => { o.ClientSettings = clientSettings; o.EventCountBeforeSnapshot = 5; });
+    silo.UseKurrentClustering(o => { o.ClientSettings = clientSettings; o.EventCountBeforeSnapshot = 50; });
     //silo.UseLocalhostClustering();
     silo.AddKurrentBasedLogConsistencyProviderAsDefault(o =>
     {

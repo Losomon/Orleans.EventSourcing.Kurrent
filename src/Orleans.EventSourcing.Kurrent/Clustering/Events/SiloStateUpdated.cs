@@ -2,7 +2,7 @@
 
 namespace Orleans.EventSourcing.Kurrent.Clustering.Events;
 
-internal sealed record SiloStateUpdated(SiloAddress SiloAddress, SiloStatus Status, ImmutableDictionary<SiloAddress, DateTime> SuspectTimes, int TableVersion) : EventBase
+internal sealed record SiloStateUpdated(SiloAddress SiloAddress, SiloStatus Status, string ETag, ImmutableDictionary<SiloAddress, DateTime> SuspectTimes, int TableVersion) : EventBase
 {
     internal override MembershipView Apply(MembershipView view) => view.Apply(this);
 }

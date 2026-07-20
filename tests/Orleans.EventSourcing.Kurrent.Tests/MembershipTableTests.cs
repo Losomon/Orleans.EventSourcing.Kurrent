@@ -31,7 +31,7 @@ public sealed class MembershipTableTests
         };
 
         client = new InMemoryKurrentClient();
-        return new KurrentMembershipTable(Options.Create(new KurrentClusteringOptions()), new KurrentMembershipEventStorage(client, Options.Create(new KurrentClusteringOptions()), Options.Create(clusterOptions), jsonSerializerOptions));
+        return new KurrentMembershipTable(new KurrentMembershipEventStorage(client, Options.Create(new KurrentClusteringOptions()), Options.Create(clusterOptions), jsonSerializerOptions));
     }
 
     private static int nextPort = 11_111;
@@ -248,5 +248,4 @@ public sealed class MembershipTableTests
         var data = await table.ReadAll();
         Assert.Single(data.Members);
     }
-
 }

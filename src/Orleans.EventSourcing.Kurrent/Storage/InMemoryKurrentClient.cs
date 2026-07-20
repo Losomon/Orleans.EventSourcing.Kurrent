@@ -187,10 +187,6 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
         return new EventRecord(eventStreamId, eventData.EventId, eventNumber, position, metadata, eventData.Data, eventData.Metadata);
     }
 
-    internal sealed record WriteResult(long NextExpectedVersion,
-                                       Position LogPosition,
-                                       StreamState NextExpectedStreamState) : IWriteResult;
-
     public async Task<IWriteResult> SetStreamMetadata(string streamName, StreamState expectedRevision, StreamMetadata metadata, CancellationToken token)
     {
         await singleAccess.WaitAsync(token).ConfigureAwait(false);
@@ -204,10 +200,23 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
         }
     }
 
-    private WriteResult SetStreamMetadataCore(string streamName, StreamState _, StreamMetadata metadata)
+    private SuccessResult SetStreamMetadataCore(string streamName, StreamState expectedRevision, StreamMetadata metadata)
     {
-        // TODO: Check revision
-        if (!streamMetadata.TryGetValue(streamName, out var events))
+        streamMetadata.TryGetValue(streamName, out var events);
+
+        // Metastream revisions are 0-based, matching real KurrentDB: the first metadata write is revision 0.
+        var currentRevision = events is { Count: > 0 }
+            ? StreamState.StreamRevision((ulong)(events.Count - 1))
+            : StreamState.NoStream;
+
+        // Real KurrentDB throws WrongExpectedVersionException when a conditional metadata write
+        // does not match the current metastream revision; StreamState.Any bypasses the check.
+        if (expectedRevision != StreamState.Any && expectedRevision != currentRevision)
+        {
+            throw new WrongExpectedVersionException(streamName, expectedRevision, currentRevision);
+        }
+
+        if (events is null)
         {
             events = [];
             streamMetadata.Add(streamName, events);
@@ -215,7 +224,7 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
 
         events.Add(metadata);
 
-        return new WriteResult(events.Count, default, StreamState.StreamRevision((ulong)events.Count));
+        return new SuccessResult(StreamState.StreamRevision((ulong)(events.Count - 1)), default);
     }
 
     public async Task<DeleteResult> DeleteStreamAsync(string streamName, StreamState expectedRevision, CancellationToken token)
@@ -277,7 +286,7 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
             return StreamMetadataResult.None(streamName);
         }
 
-        return StreamMetadataResult.Create(streamName, StreamPosition.FromInt64(events.Count), events[^1]);
+        return StreamMetadataResult.Create(streamName, StreamPosition.FromInt64(events.Count - 1), events[^1]);
     }
 
     public async IAsyncEnumerable<StreamMessage> CatchUpSubscription(FromAll start, IEventFilter eventFilter, uint checkpointInterval, [EnumeratorCancellation] CancellationToken cancellationToken)

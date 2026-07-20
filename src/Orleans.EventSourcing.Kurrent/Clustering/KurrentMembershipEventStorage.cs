@@ -15,9 +15,8 @@ namespace Orleans.EventSourcing.Kurrent.Clustering;
 internal sealed class KurrentMembershipEventStorage(IKurrentClient client, IOptions<KurrentClusteringOptions> options, IOptions<ClusterOptions> clusterOptions, JsonSerializerOptions jsonSerializerOptions)
 {
     private readonly string streamName = $"{options.Value.StreamPrefix}/{clusterOptions.Value.ServiceId}/{clusterOptions.Value.ClusterId}";
-    private static readonly string NoStreamEtag = StreamState.NoStream.ToString();
+    private const string NoStreamEtag = "None";
 
-    // The empty view carries the "no stream" ETag so the first write appends with the correct concurrency token.
     internal MembershipView InitialView { get; } = new() { ETag = NoStreamEtag };
 
     private static StreamState ToStreamState(string etag)
@@ -25,18 +24,44 @@ internal sealed class KurrentMembershipEventStorage(IKurrentClient client, IOpti
             ? StreamState.NoStream
             : StreamState.StreamRevision(ulong.Parse(etag, CultureInfo.InvariantCulture));
 
-    internal async Task<MembershipView> RefreshState(MembershipView view)
+    private static StreamPosition GetReadStreamPosition(string etag)
     {
-        var expectedStreamState = ToStreamState(view.ETag);
+        var expectedStreamState = ToStreamState(etag);
+        return expectedStreamState == StreamState.NoStream ? StreamPosition.Start : StreamPosition.FromInt64(expectedStreamState.ToInt64()).Next();
+    }
 
-        await foreach (var resolvedEvent in client.ReadStreamAsync(Direction.Forwards, streamName, expectedStreamState == StreamState.NoStream ? StreamPosition.Start : StreamPosition.FromInt64(expectedStreamState.ToInt64()), long.MaxValue, false, CancellationToken.None)
-                                                  .ConfigureAwait(true))
+    internal async Task Initialize(CancellationToken cancellationToken)
+    {
+        // If the stream does not logically exists, it may have been previously soft-deleted either by the user or a call to Delete()
+        // A soft-deleted stream still has a stream revision so a write using NoStream will fail 
+        // We therefore need to find the correct stream revision to use for the first write proper write
+        // we do this by writing a canary event to the stream, which will ensure the next read has an event to read to return the correct stream revision
+        if (!await client.ReadStreamAsync(Direction.Backwards, streamName, StreamPosition.End, 1, false, cancellationToken)
+                                .AnyAsync(cancellationToken)
+                                .ConfigureAwait(false))
+        {
+            var metadata = await client.ConditionalAppendToStreamAsync(streamName, StreamState.Any, [new EventData(Uuid.NewUuid(), nameof(InitializationCanary), JsonSerializer.SerializeToUtf8Bytes(new InitializationCanary(), jsonSerializerOptions))], cancellationToken)
+                                       .ConfigureAwait(false);
+    
+            if (metadata.Status == ConditionalWriteStatus.StreamDeleted)
+            {
+                throw new InvalidOperationException("Cannot initialize membership stream because it has been hard deleted.");
+            }
+        }
+
+    }
+    internal async Task<MembershipView> RefreshState(MembershipView view, CancellationToken cancellationToken)
+    {
+        await foreach (var resolvedEvent in client.ReadStreamAsync(Direction.Forwards, streamName, GetReadStreamPosition(view.ETag), long.MaxValue, false, cancellationToken)
+                                                  .ConfigureAwait(false))
         {
             EventBase? deserializedEvent = resolvedEvent.Event.EventType switch
             {
+                nameof(InitializationCanary) => JsonSerializer.Deserialize<InitializationCanary>(resolvedEvent.Event.Data.Span, jsonSerializerOptions),
                 nameof(MembershipTableSnapshot) => JsonSerializer.Deserialize<MembershipTableSnapshot>(resolvedEvent.Event.Data.Span, jsonSerializerOptions),
                 nameof(SiloAlive) => JsonSerializer.Deserialize<SiloAlive>(resolvedEvent.Event.Data.Span, jsonSerializerOptions),
                 nameof(SiloAdded) => JsonSerializer.Deserialize<SiloAdded>(resolvedEvent.Event.Data.Span, jsonSerializerOptions),
+                nameof(SiloDefunct) => JsonSerializer.Deserialize<SiloDefunct>(resolvedEvent.Event.Data.Span, jsonSerializerOptions),
                 nameof(SiloStateUpdated) => JsonSerializer.Deserialize<SiloStateUpdated>(resolvedEvent.Event.Data.Span, jsonSerializerOptions),
                 _ => null,
             };
@@ -55,75 +80,110 @@ internal sealed class KurrentMembershipEventStorage(IKurrentClient client, IOpti
         return view;
     }
 
-    internal async Task<MembershipView> Write<T>(MembershipView from, IEnumerable<T> writeEvents, CancellationToken cancellationToken)
-        where T : EventBase
+    private async Task<MembershipView> WriteSnapshot(MembershipView from, EventBase[] newEvents, CancellationToken cancellationToken)
     {
+        MembershipView updatedView = from;
 
-        var newEvents = writeEvents.ToList();
-        var singleEventType  = newEvents.Count == 1 ? newEvents[0].GetType() : null;
-
-        // IAmAlive does not require a concurrency check - so we can just append it to the stream without checking the expected stream state.
-        StreamState expectedState = singleEventType?.IsAssignableTo(typeof(SiloAlive)) ?? false ? StreamState.Any : ToStreamState(from.ETag);
- 
-        var writeResult = await client.ConditionalAppendToStreamAsync(streamName, expectedState, newEvents.Select(x=> new EventData(Uuid.NewUuid(), x.GetType().Name, JsonSerializer.SerializeToUtf8Bytes(x, x.GetType(), jsonSerializerOptions))), cancellationToken)
-                                      .ConfigureAwait(false);
-
-        if (writeResult.Status != ConditionalWriteStatus.Succeeded)
-        {
-            return from;
-        }
-
-        if (singleEventType?.IsAssignableTo(typeof(MembershipTableSnapshot)) ?? false && writeResult.NextExpectedVersion > 0)
-        {
-            // we can truncate all events in the stream prior to a full snapshot.
-            // There is some risk of trampling writes on the truncation point this would mean we might end up retaining previous events longer than needed,
-            // but that would not be a correctness issue
-            _ = await client.SetStreamMetadata(streamName, StreamState.Any, new StreamMetadata(truncateBefore: StreamPosition.FromInt64(writeResult.NextExpectedVersion)), cancellationToken).ConfigureAwait(false);
-        }
-
+        // Incorporate the new events into the updated view
         foreach (var evt in newEvents)
         {
-            from = evt.Apply(from) with { ETag = writeResult.NextExpectedStreamState.ToString() };
+            updatedView = evt.Apply(updatedView);
+        }
+
+        // Write a snapshot of the updated view to the stream, using the ETag for optimistic concurrency
+        if (await client.ConditionalAppendToStreamAsync(streamName,
+                                                        ToStreamState(updatedView.ETag),
+                                                        [new EventData(Uuid.NewUuid(), nameof(MembershipTableSnapshot), JsonSerializer.SerializeToUtf8Bytes<MembershipTableSnapshot>(updatedView.GetSnapshot(), jsonSerializerOptions))],
+                                                        cancellationToken)
+                        .ConfigureAwait(false) is { Status: ConditionalWriteStatus.Succeeded } success)
+        {
+
+            // Write the truncation point for the snapshot to the stream, using the ETag for optimistic concurrency            
+            var truncationPoint = StreamPosition.FromInt64(success.NextExpectedVersion);
+
+            while(true)
+            {
+                var readMetadata = await client.GetStreamMetadata(streamName, cancellationToken)
+                                               .ConfigureAwait(false);
+  
+
+                if (readMetadata.Metadata.TruncateBefore >= truncationPoint)
+                {
+                    // Skip if another snapshot has been written after ours, and the truncation point has advanced beyond our event
+                    break;
+                }
+
+                // Conditional metadata write, if the metadata revision has changed likely means the truncation point has changed
+                try
+                {
+                    var writeMetadata = await client.SetStreamMetadata(streamName,
+                                                                       readMetadata.MetastreamRevision.HasValue ? StreamState.StreamRevision(readMetadata.MetastreamRevision.Value) : StreamState.NoStream,
+                                                                       new StreamMetadata(maxCount: readMetadata.Metadata.MaxCount,
+                                                                                          maxAge: readMetadata.Metadata.MaxAge,
+                                                                                          truncateBefore: truncationPoint,
+                                                                                          cacheControl: readMetadata.Metadata.CacheControl,
+                                                                                          acl: readMetadata.Metadata.Acl,
+                                                                                          customMetadata: readMetadata.Metadata.CustomMetadata),
+                                                                       cancellationToken)
+                                                    .ConfigureAwait(false);
+
+                    if (writeMetadata is WrongExpectedVersionResult)
+                    {
+                        continue; // try again
+                    }
+                }
+                catch(WrongExpectedVersionException)
+                {
+                    continue; // try again
+                }
+
+                break; // Success
+            }
+        
+            return updatedView with { ETag = success.NextExpectedStreamState.ToString() };
         }
 
         return from;
     }
 
-    internal async Task<MembershipView> Write(MembershipView from, SiloAlive writeEvent, CancellationToken cancellationToken)
+    internal async Task<MembershipView> Write(MembershipView from, IEnumerable<EventBase> newEvents, CancellationToken cancellationToken)
     {
-        var writeResult = await client.ConditionalAppendToStreamAsync(streamName, StreamState.Any, [new EventData(Uuid.NewUuid(), nameof(SiloAlive), JsonSerializer.SerializeToUtf8Bytes(writeEvent, jsonSerializerOptions))], cancellationToken)
-                                      .ConfigureAwait(false);
-
-        if (writeResult.Status != ConditionalWriteStatus.Succeeded)
+        if (newEvents.ToArray() is not { Length: >0 } writeEvents)
         {
             return from;
         }
 
-        from = writeEvent.Apply(from) with { ETag = writeResult.NextExpectedStreamState.ToString() };
-
-        return from;
-    }
-
-    internal async Task<MembershipView> Write(MembershipView from, MembershipTableSnapshot writeEvent, CancellationToken cancellationToken)
-    {
-        var writeResult = await client.ConditionalAppendToStreamAsync(streamName, StreamState.Any, [new EventData(Uuid.NewUuid(), nameof(MembershipTableSnapshot), JsonSerializer.SerializeToUtf8Bytes(writeEvent, jsonSerializerOptions))], cancellationToken)
-                                      .ConfigureAwait(false);
-
-        if (writeResult.Status != ConditionalWriteStatus.Succeeded)
+        if (from.EventsSinceSnapshot + writeEvents.Length >= options.Value.EventCountBeforeSnapshot) // Have we reached the threshold for writing a full snapshot?
         {
-            return from;
+            return await WriteSnapshot(from, writeEvents, cancellationToken)
+                        .ConfigureAwait(false);
         }
+      
+        var expectedStreamState = writeEvents.All(x => x is SiloDefunct || x is SiloAlive) // These two events are dirty write safe
+                                                       ? StreamState.Any 
+                                                       : ToStreamState(from.ETag); // All other events require optimistic concurrency
 
-        // we can truncate all events in the stream prior to a full snapshot.
-        // There is some risk of trampling writes into the stream metadata this would mean we might end up retaining previous events longer than needed,
-        // but that would not be a correctness issue
-        _ = await client.SetStreamMetadata(streamName, StreamState.Any, new StreamMetadata(truncateBefore: StreamPosition.FromInt64(writeResult.NextExpectedVersion)), cancellationToken).ConfigureAwait(false);
-
-        from = writeEvent.Apply(from) with { ETag = writeResult.NextExpectedStreamState.ToString() };
+        if (await client.ConditionalAppendToStreamAsync(streamName,
+                                                        expectedStreamState,
+                                                        writeEvents.Select(x=> new EventData(Uuid.NewUuid(), x.GetType().Name, JsonSerializer.SerializeToUtf8Bytes(x, x.GetType(), jsonSerializerOptions))),
+                                                        cancellationToken)
+                        .ConfigureAwait(false) is { Status: ConditionalWriteStatus.Succeeded } success)
+        {
+            foreach (var evt in writeEvents)
+            {
+                if (expectedStreamState == StreamState.Any)
+                {
+                    from = evt.Apply(from); // Do not update ETag as we may not have observed intermediate events because this write was unconditional
+                }
+                else
+                {
+                    from = evt.Apply(from) with { ETag = success.NextExpectedStreamState.ToString() };
+                }
+            }
+        }       
 
         return from;
     }
-
 
     internal async Task<MembershipView> Delete(MembershipView view, string clusterId)
     {
@@ -133,7 +193,7 @@ internal sealed class KurrentMembershipEventStorage(IKurrentClient client, IOpti
         }
 
         _ = await client.DeleteStreamAsync(streamName, StreamState.Any, CancellationToken.None)
-                                           .ConfigureAwait(true);
+                        .ConfigureAwait(false);
 
         return InitialView;
     }

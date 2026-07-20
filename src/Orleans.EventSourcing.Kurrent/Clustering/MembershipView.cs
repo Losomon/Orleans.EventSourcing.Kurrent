@@ -5,9 +5,9 @@ namespace Orleans.EventSourcing.Kurrent.Clustering;
 
 // The materialized membership state as of a specific stream position.
 // It carries both halves of the Orleans optimistic-concurrency token: the domain Version
-// (persisted in the snapshot payload) and the ETag (derived from the stream position by storage).
+// and the ETag (derived from the stream position by storage).
 // The ETag is stored as an opaque string so this domain type stays free of any Kurrent client types;
-// KurrentMembershipStorage owns the StreamState <-> ETag translation.
+// KurrentMembershipEventStorage owns the StreamState <-> ETag translation.
 internal sealed record MembershipView
 {
     public ImmutableDictionary<SiloAddress, ImmutableMembership> Members { get; init; } = ImmutableDictionary<SiloAddress, ImmutableMembership>.Empty;
@@ -25,18 +25,16 @@ internal sealed record MembershipView
             ? new MembershipTableData(entry.ToMembershipEntry(), ToTableVersion())
             : new MembershipTableData(ToTableVersion());
 
-    private uint EventsSinceSnapshot { get; init; }
+    internal uint EventsSinceSnapshot { get; init; }
 
-    // Fold a liveness event into the view.
     internal MembershipView Apply(SiloAlive wasAliveEvent)
     => Members.TryGetValue(wasAliveEvent.SiloAddress, out var entry)
            ? this with
            {
-               Members = Members.SetItem(wasAliveEvent.SiloAddress, entry with { IAmAliveTime = wasAliveEvent.IAmAliveTime }),
+               Members = Members.SetItem(wasAliveEvent.SiloAddress, entry with { IAmAliveTime = wasAliveEvent.IAmAliveTime}),
                EventsSinceSnapshot = EventsSinceSnapshot + 1
            }
            : this;
-
 
     // A snapshot is a full checkpoint: it replaces the members and version wholesale while keeping the current ETag,
     // which storage overwrites with the actual stream position after the read/write completes.
@@ -56,7 +54,7 @@ internal sealed record MembershipView
     internal MembershipView Apply(SiloStateUpdated siloUpdated)
      => this with
      {
-         Members = Members.SetItem(siloUpdated.SiloAddress, Members[siloUpdated.SiloAddress] with { SuspectTimes = siloUpdated.SuspectTimes, Status = siloUpdated.Status }),
+         Members = Members.SetItem(siloUpdated.SiloAddress, Members[siloUpdated.SiloAddress] with { SuspectTimes = siloUpdated.SuspectTimes, Status = siloUpdated.Status, ETag = siloUpdated.ETag}),
          Version = siloUpdated.TableVersion,
          EventsSinceSnapshot = EventsSinceSnapshot + 1
      };
@@ -69,7 +67,7 @@ internal sealed record MembershipView
             yield break;
         }
 
-        yield return new SiloStateUpdated(entry.SiloAddress, entry.Status, entry.SuspectTimes.ToImmutableDictionary(x => x.Item1, x => x.Item2), tableVersion);
+        yield return new SiloStateUpdated(entry.SiloAddress, entry.Status, Guid.NewGuid().ToString(), entry.SuspectTimes.ToImmutableDictionary(x => x.Item1, x => x.Item2), tableVersion);
     }
 
     internal IEnumerable<EventBase> InsertRow(MembershipEntry entry, int tableVersion)
@@ -82,34 +80,36 @@ internal sealed record MembershipView
         yield return new SiloAdded(ImmutableMembership.FromMembershipEntry(entry), tableVersion);
     }
 
-    internal SiloAlive? UpdateIAmAlive(MembershipEntry updateEntry)
+    internal IEnumerable<SiloAlive> UpdateIAmAlive(MembershipEntry updateEntry)
     {
         if (!Members.TryGetValue(updateEntry.SiloAddress, out var entry)
             || entry.IAmAliveTime > updateEntry.IAmAliveTime)
         {
-            return null;
+            yield break;
         }
 
-        return new SiloAlive(entry.SiloAddress, updateEntry.IAmAliveTime);
+        yield return new SiloAlive(entry.SiloAddress, updateEntry.IAmAliveTime);
     }
-    internal MembershipTableSnapshot? CleanUpDefunctEntries(DateTimeOffset beforeDate, int eventsBeforeSnapshot)
-    {
-        var remaining = Members;
 
+    internal IEnumerable<EventBase> CleanUpDefunctEntries(DateTimeOffset beforeDate)
+    {  
         foreach (var item in Members)
         {
             if (item.Value.Status != SiloStatus.Active &&
                 new DateTime(Math.Max(item.Value.IAmAliveTime.Ticks, item.Value.StartTime.Ticks), DateTimeKind.Utc) < beforeDate)
             {
-                remaining = remaining.Remove(item.Key);
+                yield return new SiloDefunct(item.Key);
             }
-        }
-
-        if (ReferenceEquals(remaining, Members) && EventsSinceSnapshot < eventsBeforeSnapshot)
-        {
-            return null;
-        }
-
-        return new MembershipTableSnapshot(remaining, Version);
+        }  
     }
+
+    internal MembershipView Apply(SiloDefunct siloDefunct)
+    => this with
+    {
+        Members = Members.Remove(siloDefunct.SiloAddress),
+        EventsSinceSnapshot = EventsSinceSnapshot + 1
+    };
+
+    internal MembershipTableSnapshot GetSnapshot()
+        => new(Members, Version);
 }

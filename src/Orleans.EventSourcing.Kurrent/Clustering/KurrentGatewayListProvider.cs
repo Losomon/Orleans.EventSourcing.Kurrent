@@ -17,7 +17,7 @@ internal sealed class KurrentGatewayListProvider(KurrentMembershipEventStorage s
 
     public async Task<IList<Uri>> GetGateways()
     {
-        _membershipView = await _storage.RefreshState(_membershipView).ConfigureAwait(true);
+        _membershipView = await _storage.RefreshState(_membershipView, CancellationToken.None).ConfigureAwait(true);
         var result = _membershipView.Members
            .Where(x => x.Value.Status == SiloStatus.Active && x.Value.ProxyPort != 0)
            .Select(x =>

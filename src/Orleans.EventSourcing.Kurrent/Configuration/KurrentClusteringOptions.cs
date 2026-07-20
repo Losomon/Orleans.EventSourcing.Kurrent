@@ -16,17 +16,20 @@ public sealed class KurrentClusteringOptions
     public KurrentDBClientSettings ClientSettings { get; set; } = null!;
 
     /// <summary>
-    /// The number of events before a full snapshot is written, default value 5_000.
+    /// The number of events before a full snapshot is written, default value: <code>5000</code>
     /// 
     /// <para>
-    /// Use this setting to control when a full snapshot of the membership table is written to the event stream
-    /// and the stream is truncated to allow prior events to be scavenged.
+    /// Use this setting to control how many events are written to the event stream
+    /// before a full snapshot is written and the stream is truncated to allow prior events to be scavenged.
+    /// </para>
+    /// <para>
+    /// If this is set to 0 a full snapshot will be written every time, this will result in more write contention and higher storage usage, but may be useful for testing or debugging purposes.
     /// </para>
     /// </summary>
     public int EventCountBeforeSnapshot { get; set; } = DefaultEventCountBeforeSnapshot;
 
     /// <summary>
-    /// Configure the default stream prefix for the cluster membership stream
+    /// Configure the default stream prefix for the cluster membership stream, default value: <code>Orleans.Cluster.Membership</code>.
     /// </summary>
     public string StreamPrefix { get; set; } = DefaultStreamPrefix;
 }
