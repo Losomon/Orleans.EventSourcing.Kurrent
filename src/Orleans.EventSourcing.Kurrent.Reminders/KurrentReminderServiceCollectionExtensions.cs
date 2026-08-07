@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Options;
 using Orleans.EventSourcing.Kurrent.Configuration;
 using Orleans.EventSourcing.Kurrent.Hosting;
-using Orleans.Storage;
 
 namespace Orleans.EventSourcing.Kurrent.Reminders;
 

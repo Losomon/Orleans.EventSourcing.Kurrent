@@ -10,7 +10,7 @@ internal sealed class KurrentMembershipTable(KurrentMembershipEventStorage stora
      => current = await storage.Delete(current, clusterId).ConfigureAwait(false);
 
     public Task InitializeMembershipTable(bool tryInitTableVersion)
-     => tryInitTableVersion ? storage.Initialize(CancellationToken.None) : Task.CompletedTask;
+     => Task.CompletedTask;
 
     public Task<bool> InsertRow(MembershipEntry entry, TableVersion tableVersion)
      => TryChange(tableVersion.VersionEtag, x => x.InsertRow(entry, tableVersion.Version), CancellationToken.None);

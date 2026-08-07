@@ -34,12 +34,12 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
         =>ValueTask.CompletedTask;
     
 
-    public async IAsyncEnumerable<ResolvedEvent> ReadStreamAsync(Direction direction,
-                                                                 string streamName,
-                                                                 StreamPosition revision,
-                                                                 long maxCount,
-                                                                 bool resolveLinkTos,
-                                                                 [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async ValueTask<IStreamReadResult> ReadStreamAsync(Direction direction,
+                                      string streamName,
+                                      StreamPosition revision,
+                                      long maxCount,
+                                      bool resolveLinkTos,
+                                      CancellationToken cancellationToken)
     {
         await singleAccess.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -47,7 +47,7 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
 
             if (!streams.TryGetValue(streamName, out var events))
             {
-                yield break;
+                return StreamDoesNotExistReadResult.Instance;
             }
 
             var metadata = GetStreamMetadataCore(streamName);
@@ -90,19 +90,19 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
             // Take requires an int, ensure maxCount doesn't overflow int.MaxValue
             var countToTake = (int)Math.Min(maxCount, int.MaxValue);
             query = query.Take(countToTake);
-
-            foreach (var eventRecord in query)
-            {
-                yield return new ResolvedEvent(eventRecord, link: null, commitPosition: null);
-                ;
-            }
-
-            await Task.CompletedTask.ConfigureAwait(false); // satisfy async method requirement
+    
+            return new InMemoryResult(query.Select(x => new ResolvedEvent(x, null, null)).ToAsyncEnumerable(), StreamPosition.FromStreamRevision(checked((ulong)events.Count - 1)));
         }
         finally
         {
             singleAccess.Release();
         }
+    }
+
+    internal sealed record InMemoryResult(IAsyncEnumerable<ResolvedEvent> AsyncEnumerable, StreamPosition? LastStreamPosition) : IStreamReadResult
+    {     
+        public IAsyncEnumerator<ResolvedEvent> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+            => AsyncEnumerable.GetAsyncEnumerator(cancellationToken);    
     }
 
     public async Task<ConditionalWriteResult> ConditionalAppendToStreamAsync(string streamName,
@@ -482,3 +482,4 @@ internal sealed class InMemoryKurrentClient : IKurrentClient
         }
     }
 }
+

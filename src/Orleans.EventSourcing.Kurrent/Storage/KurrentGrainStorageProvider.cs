@@ -73,14 +73,14 @@ internal sealed class KurrentGrainStorageProvider(IKurrentClient kurrentClient, 
         };
         try
         {
-            var enumerable = kurrentClient.ReadStreamAsync(Direction.Backwards,
-                                                           streamNameProvider.GetStreamName(stateName, grainId),
-                                                           StreamPosition.End,
-                                                           2,
-                                                           false,
-                                                           CancellationToken.None);
+            var readResult = await kurrentClient.ReadStreamAsync(Direction.Backwards,
+                                                                  streamNameProvider.GetStreamName(stateName, grainId),
+                                                                  StreamPosition.End,
+                                                                  2,
+                                                                  false,
+                                                                  CancellationToken.None).ConfigureAwait(false);
 
-            var enumerator = enumerable.GetAsyncEnumerator();
+            var enumerator = readResult.GetAsyncEnumerator();
             try
             {
                 if (!await enumerator.MoveNextAsync().ConfigureAwait(false))

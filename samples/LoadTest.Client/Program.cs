@@ -262,7 +262,7 @@ internal sealed class WorkerStats
 
 internal sealed record LoadTestOptions
 {
-    public int Grains { get; init; } = 100;
+    public int Grains { get; init; } = 10000;
     public int Workers { get; init; } = 32;
     public int DurationSeconds { get; init; } = 90;
     public double ReminderFraction { get; init; } = 0.1;

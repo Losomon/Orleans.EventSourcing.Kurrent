@@ -1,5 +1,4 @@
-﻿using Orleans.EventSourcing.Kurrent.Reminders.Events;
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 
 namespace Orleans.EventSourcing.Kurrent.Reminders;
 

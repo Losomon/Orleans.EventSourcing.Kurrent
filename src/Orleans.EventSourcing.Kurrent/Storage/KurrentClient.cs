@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 using KurrentDB.Client;
 
 namespace Orleans.EventSourcing.Kurrent.Storage;
@@ -10,9 +8,9 @@ internal sealed class KurrentClient(KurrentDBClientSettings settings) : IKurrent
 
     public Task<IWriteResult> SetStreamMetadata(string streamName, StreamState expectedRevision, StreamMetadata streamMetadata, CancellationToken token)
         => client.SetStreamMetadataAsync(streamName,
-                                          expectedRevision,
-                                          streamMetadata,
-                                          cancellationToken: token);
+                                         expectedRevision,
+                                         streamMetadata,
+                                         cancellationToken: token);
 
     public Task<StreamMetadataResult> GetStreamMetadata(string streamName, CancellationToken token)
         => client.GetStreamMetadataAsync(streamName, cancellationToken: token);
@@ -20,28 +18,48 @@ internal sealed class KurrentClient(KurrentDBClientSettings settings) : IKurrent
 
     public Task<DeleteResult> DeleteStreamAsync(string streamName, StreamState expectedRevision, CancellationToken token)
         => client.DeleteAsync(streamName,
-                               expectedRevision,
-                               cancellationToken: token);
+                              expectedRevision,
+                              cancellationToken: token);
 
-    public async IAsyncEnumerable<ResolvedEvent> ReadStreamAsync(Direction direction,
-                                                                 string streamName,
-                                                                 StreamPosition position,
-                                                                 long maxCount,
-                                                                 bool resolveLinkTos,
-                                                                 [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async ValueTask<IStreamReadResult> ReadStreamAsync(Direction direction,
+                                                      string streamName,
+                                                      StreamPosition position,
+                                                      long maxCount,
+                                                      bool resolveLinkTos,
+                                                      CancellationToken cancellationToken)
     {
-        var events = client.ReadStreamAsync(direction, streamName, position, maxCount, resolveLinkTos, cancellationToken: cancellationToken);
-
-        var readState = await events.ReadState.ConfigureAwait(false);
-
-        if (readState == ReadState.Ok)
+        var result = client.ReadStreamAsync(direction, streamName, position, maxCount, resolveLinkTos, cancellationToken: cancellationToken);
+        if (await result.ReadState.ConfigureAwait(false) == ReadState.Ok)
         {
-            await foreach (var e in events.ConfigureAwait(false))
+            return new EventResult(result.Messages);
+        }
+        else
+        {
+            return StreamDoesNotExistReadResult.Instance;
+        }
+    }
+
+    private sealed class EventResult(IAsyncEnumerable<StreamMessage> messages) : IStreamReadResult
+    {
+        public StreamPosition? LastStreamPosition { get; private set; }
+
+        public async IAsyncEnumerator<ResolvedEvent> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+        {
+            await foreach(var message in messages.WithCancellation(cancellationToken).ConfigureAwait(false))
             {
-                yield return e;
+                switch (message)
+                {
+                    case StreamMessage.Event eventMessage:
+                        yield return eventMessage.ResolvedEvent;
+                        break;
+                    case StreamMessage.LastStreamPosition lastStreamPositionMessage:
+                        LastStreamPosition = lastStreamPositionMessage.StreamPosition;
+                        break;
+                }
             }
         }
     }
+
 
     public Task<ConditionalWriteResult> ConditionalAppendToStreamAsync(string streamName,
                                                                        StreamState expectedRevision,

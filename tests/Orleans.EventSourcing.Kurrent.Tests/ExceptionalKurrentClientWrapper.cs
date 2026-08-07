@@ -46,7 +46,7 @@ internal sealed class ExceptionalKurrentClientWrapper(IKurrentClient passthrough
         return passthrough.GetStreamMetadata(streamName, token);
     }
 
-    public IAsyncEnumerable<ResolvedEvent> ReadStreamAsync(Direction direction, string streamName, StreamPosition position, long maxCount, bool resolveLinkTos, CancellationToken cancellationToken)
+    public ValueTask<IStreamReadResult> ReadStreamAsync(Direction direction, string streamName, StreamPosition position, long maxCount, bool resolveLinkTos, CancellationToken cancellationToken)
     {
         ThrowIfException(streamName);
         return passthrough.ReadStreamAsync(direction, streamName, position, maxCount, resolveLinkTos, cancellationToken);

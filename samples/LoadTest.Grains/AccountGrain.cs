@@ -1,5 +1,4 @@
 using Orleans.EventSourcing;
-using Orleans.Runtime;
 
 namespace LoadTest.Grains;
 

@@ -29,55 +29,39 @@ internal sealed class KurrentMembershipEventStorage(IKurrentClient client, IOpti
         var expectedStreamState = ToStreamState(etag);
         return expectedStreamState == StreamState.NoStream ? StreamPosition.Start : StreamPosition.FromInt64(expectedStreamState.ToInt64()).Next();
     }
-
-    internal async Task Initialize(CancellationToken cancellationToken)
-    {
-        // If the stream does not logically exists, it may have been previously soft-deleted either by the user or a call to Delete()
-        // A soft-deleted stream still has a stream revision so a write using NoStream will fail 
-        // We therefore need to find the correct stream revision to use for the first write proper write
-        // we do this by writing a canary event to the stream, which will ensure the next read has an event to read to return the correct stream revision
-        if (!await client.ReadStreamAsync(Direction.Backwards, streamName, StreamPosition.End, 1, false, cancellationToken)
-                                .AnyAsync(cancellationToken)
-                                .ConfigureAwait(false))
-        {
-            var metadata = await client.ConditionalAppendToStreamAsync(streamName, StreamState.Any, [new EventData(Uuid.NewUuid(), nameof(InitializationCanary), JsonSerializer.SerializeToUtf8Bytes(new InitializationCanary(), jsonSerializerOptions))], cancellationToken)
-                                       .ConfigureAwait(false);
     
-            if (metadata.Status == ConditionalWriteStatus.StreamDeleted)
-            {
-                throw new InvalidOperationException("Cannot initialize membership stream because it has been hard deleted.");
-            }
-        }
-
-    }
     internal async Task<MembershipView> RefreshState(MembershipView view, CancellationToken cancellationToken)
     {
-        await foreach (var resolvedEvent in client.ReadStreamAsync(Direction.Forwards, streamName, GetReadStreamPosition(view.ETag), long.MaxValue, false, cancellationToken)
-                                                  .ConfigureAwait(false))
+        var readResult = await client.ReadStreamAsync(Direction.Forwards, streamName, GetReadStreamPosition(view.ETag), long.MaxValue, false, cancellationToken).ConfigureAwait(false);
+
+        await foreach (var message in readResult.ConfigureAwait(false))
         {
-            EventBase? deserializedEvent = resolvedEvent.Event.EventType switch
+            EventBase? deserializedEvent = message.Event.EventType switch
             {
-                nameof(InitializationCanary) => JsonSerializer.Deserialize<InitializationCanary>(resolvedEvent.Event.Data.Span, jsonSerializerOptions),
-                nameof(MembershipTableSnapshot) => JsonSerializer.Deserialize<MembershipTableSnapshot>(resolvedEvent.Event.Data.Span, jsonSerializerOptions),
-                nameof(SiloAlive) => JsonSerializer.Deserialize<SiloAlive>(resolvedEvent.Event.Data.Span, jsonSerializerOptions),
-                nameof(SiloAdded) => JsonSerializer.Deserialize<SiloAdded>(resolvedEvent.Event.Data.Span, jsonSerializerOptions),
-                nameof(SiloDefunct) => JsonSerializer.Deserialize<SiloDefunct>(resolvedEvent.Event.Data.Span, jsonSerializerOptions),
-                nameof(SiloStateUpdated) => JsonSerializer.Deserialize<SiloStateUpdated>(resolvedEvent.Event.Data.Span, jsonSerializerOptions),
+                nameof(MembershipTableSnapshot) => JsonSerializer.Deserialize<MembershipTableSnapshot>(message.Event.Data.Span, jsonSerializerOptions),
+                nameof(SiloAlive) => JsonSerializer.Deserialize<SiloAlive>(message.Event.Data.Span, jsonSerializerOptions),
+                nameof(SiloAdded) => JsonSerializer.Deserialize<SiloAdded>(message.Event.Data.Span, jsonSerializerOptions),
+                nameof(SiloDefunct) => JsonSerializer.Deserialize<SiloDefunct>(message.Event.Data.Span, jsonSerializerOptions),
+                nameof(SiloStateUpdated) => JsonSerializer.Deserialize<SiloStateUpdated>(message.Event.Data.Span, jsonSerializerOptions),
                 _ => null,
             };
 
             if (deserializedEvent is null)
             {
-                throw new InvalidOperationException($"Event type {resolvedEvent.Event.EventType} could not be deserialized");
+                throw new InvalidOperationException($"Event type {message.Event.EventType} could not be deserialized");
             }
 
-            view = deserializedEvent.Apply(view) with
-            {
-                ETag = StreamState.StreamRevision(resolvedEvent.Event.EventNumber.ToUInt64()).ToString()
-            };
+            view = deserializedEvent.Apply(view) with { ETag = message.Event.EventNumber.ToInt64().ToString(CultureInfo.InvariantCulture) };
         }
 
-        return view;
+        if (readResult.LastStreamPosition.HasValue)
+        {
+            return view with { ETag = readResult.LastStreamPosition.Value.ToInt64().ToString(CultureInfo.InvariantCulture) };
+        }
+        else
+        {
+            return view;
+        }
     }
 
     private async Task<MembershipView> WriteSnapshot(MembershipView from, EventBase[] newEvents, CancellationToken cancellationToken)

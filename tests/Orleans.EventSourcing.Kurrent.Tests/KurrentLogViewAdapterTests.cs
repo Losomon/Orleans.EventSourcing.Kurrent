@@ -11,6 +11,82 @@ namespace Orleans.EventSourcing.Kurrent.Tests
     public sealed class KurrentLogViewAdapterTests
     {
         [Fact]
+        public async Task SoftDeleteThenWrite()
+        {
+            var streamNameProvider = new KurrentStreamName();
+            var services = new TestLogConsistencyProtocolServices();
+            var innerClient = new InMemoryKurrentClient();
+            var blockingClient = new BlockingKurrentClient(innerClient);
+            var adapter = CreateAdapter(blockingClient, services, streamNameProvider);
+
+            try
+            {
+                await blockingClient.DeleteStreamAsync(streamNameProvider.GetStreamName(services.GrainId), StreamState.NoStream, TestContext.Current.CancellationToken);
+                Assert.True(await adapter.TryAppend(new Applied(100)));
+
+                blockingClient.BlockNextAppend();
+                adapter.SubmitRange([new Applied(25), new Truncate(), new Applied(42)]);
+
+                await blockingClient.WaitForAppendToStart();
+
+                Assert.Equal(100, adapter.ConfirmedView.Balance);
+                Assert.Equal(42, adapter.TentativeView.Balance);
+
+                blockingClient.ReleaseAppend();
+                await adapter.ConfirmSubmittedEntries();
+
+                Assert.Equal(42, adapter.ConfirmedView.Balance);
+                Assert.Equal(42, adapter.TentativeView.Balance);
+            }
+            finally
+            {
+                adapter.Dispose();
+                await blockingClient.DisposeAsync();
+            }
+        }
+
+        [Fact]
+        public async Task EmptyReadPreservesSoftDeletedStreamPosition()
+        {
+            var client = new InMemoryKurrentClient();
+            const string streamName = "soft-deleted";
+
+            var missing = await client.ReadStreamAsync(Direction.Forwards,
+                                                       streamName,
+                                                       StreamPosition.Start,
+                                                       1,
+                                                       false,
+                                                       TestContext.Current.CancellationToken);
+            var missingResult = Assert.IsType<StreamDoesNotExistReadResult>(missing);
+            Assert.Null(missingResult.LastStreamPosition);
+
+            var append = await client.ConditionalAppendToStreamAsync(streamName,
+                                                                       StreamState.NoStream,
+                                                                       [new EventData(Uuid.NewUuid(), "event", Array.Empty<byte>(), null)],
+                                                                       TestContext.Current.CancellationToken);
+            Assert.Equal(ConditionalWriteStatus.Succeeded, append.Status);
+
+            await client.DeleteStreamAsync(streamName,
+                                           append.NextExpectedStreamState,
+                                           TestContext.Current.CancellationToken);
+
+            var softDeleted = await client.ReadStreamAsync(Direction.Forwards,
+                                                            streamName,
+                                                            StreamPosition.Start,
+                                                            1,
+                                                            false,
+                                                            TestContext.Current.CancellationToken);
+      
+            Assert.Equal(StreamPosition.FromStreamRevision(0), softDeleted.LastStreamPosition);
+
+            var resumed = await client.ConditionalAppendToStreamAsync(streamName,
+                                                                       StreamState.StreamRevision(softDeleted.LastStreamPosition!.Value),
+                                                                       [new EventData(Uuid.NewUuid(), "event", Array.Empty<byte>(), null)],
+                                                                       TestContext.Current.CancellationToken);
+            Assert.Equal(ConditionalWriteStatus.Succeeded, resumed.Status);
+        }
+
+        [Fact]
         public async Task SubmitRangeResetsTentativeViewBeforePersistence()
         {
             var streamNameProvider = new KurrentStreamName();
@@ -69,9 +145,18 @@ namespace Orleans.EventSourcing.Kurrent.Tests
                 Assert.Equal(42, adapter.ConfirmedView.Balance);
                 Assert.Equal(42, adapter.TentativeView.Balance);
 
-                var visibleEvents = await client.ReadStreamAsync(Direction.Forwards, streamName, StreamPosition.Start, int.MaxValue, false, TestContext.Current.CancellationToken)
-                                                .Select(serializer.DeserializeEvent)
-                                                .ToListAsync(TestContext.Current.CancellationToken);
+                var readResult = await client.ReadStreamAsync(Direction.Forwards,
+                                                              streamName,
+                                                              StreamPosition.Start,
+                                                              int.MaxValue,
+                                                              false,
+                                                              TestContext.Current.CancellationToken);
+   
+                var visibleEvents = new List<TestLogEntry>();
+                await foreach (var resolvedEvent in readResult)
+                {
+                    visibleEvents.Add(serializer.DeserializeEvent(resolvedEvent));
+                }
 
                 Assert.Collection(visibleEvents,
                                   entry => Assert.IsType<Truncate>(entry),
@@ -194,7 +279,7 @@ namespace Orleans.EventSourcing.Kurrent.Tests
             public Task<StreamMetadataResult> GetStreamMetadata(string streamName, CancellationToken token)
                 => inner.GetStreamMetadata(streamName, token);
 
-            public IAsyncEnumerable<ResolvedEvent> ReadStreamAsync(Direction direction, string streamName, StreamPosition position, long maxCount, bool resolveLinkTos, CancellationToken cancellationToken)
+            public ValueTask<IStreamReadResult> ReadStreamAsync(Direction direction, string streamName, StreamPosition position, long maxCount, bool resolveLinkTos, CancellationToken cancellationToken)
                 => inner.ReadStreamAsync(direction, streamName, position, maxCount, resolveLinkTos, cancellationToken);
 
             public Task<IWriteResult> SetStreamMetadata(string streamName, StreamState expectedRevision, StreamMetadata streamMetadata, CancellationToken token)

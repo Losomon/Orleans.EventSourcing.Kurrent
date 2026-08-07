@@ -3,7 +3,6 @@ using Orleans.EventSourcing.Kurrent.Observability;
 
 using Orleans.Storage;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 
 namespace Orleans.EventSourcing.Kurrent.Storage;
@@ -107,9 +106,18 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
 
         var maxCount = toVersion - fromVersion + 1; // inclusive range
 
-        return await ReadAsync(fromVersion.ToStreamPosition(), maxCount, CancellationToken.None).Select(x => x.Log).ToListAsync().ConfigureAwait(true); // StreamPosition not needed here
-    }
+        var readResult = await client.ReadStreamAsync(Direction.Forwards, streamName, fromVersion.ToStreamPosition(), maxCount, false, CancellationToken.None)
+                                     .ConfigureAwait(false);
 
+        var result = new List<TLogEntry>();
+        await foreach (var resolvedEvent in readResult.ConfigureAwait(false))
+        {
+            result.Add(Deserialize(resolvedEvent));
+        }
+
+        return result;
+    }
+    
     public void Submit(TLogEntry entry)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
@@ -157,22 +165,32 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
                         bool firstEventInStream = true;
                         StreamPosition? pendingTruncationPosition = null;
 
-                        await foreach (var logEntry in ReadAsync(StreamPosition.Start, int.MaxValue, token).ConfigureAwait(true))
-                        {
-                            if (IsDeletePriorEventsMarker(logEntry.Log) && !firstEventInStream)
+                        var readResult = await client.ReadStreamAsync(Direction.Forwards, streamName, StreamPosition.Start, int.MaxValue, false, token)
+                                                     .ConfigureAwait(false);
+
+                      
+                            await foreach (var resolvedEvent in readResult.ConfigureAwait(false))
                             {
-                                newConfirmedView = new TLogView();
-                                newTentativeView = new TLogView();
+                                var deserializedLog = Deserialize(resolvedEvent);
+                                if (IsDeletePriorEventsMarker(deserializedLog) && !firstEventInStream)
+                                {
+                                    newConfirmedView = new TLogView();
+                                    newTentativeView = new TLogView();
 
-                                pendingTruncationPosition = logEntry.StreamPosition;
+                                    pendingTruncationPosition = StreamPosition.FromStreamRevision(resolvedEvent.OriginalEventNumber);
+                                }
+
+                                host.UpdateView(newConfirmedView, deserializedLog);
+                                host.UpdateView(newTentativeView, deserializedLog);
+                                firstEventInStream = false;
+                                ConfirmedVersion = resolvedEvent.OriginalEventNumber.ToVersion();
                             }
-
-                            host.UpdateView(newConfirmedView, logEntry.Log);
-                            host.UpdateView(newTentativeView, logEntry.Log);
-                            ConfirmedVersion = logEntry.Version;
-                            firstEventInStream = false;
+                        
+                        if (readResult.LastStreamPosition.HasValue)
+                        {
+                            ConfirmedVersion = readResult.LastStreamPosition.Value.ToVersion();
                         }
-
+      
                         if (pendingTruncationPosition is { } truncPos)
                         {
                             await DeleteBefore(truncPos, token).ConfigureAwait(true);
@@ -342,16 +360,6 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
         var eventEntry = eventConverter.DeserializeEvent(logEntry);
         Metrics.EventDeserializationLatency.Record(sw.ElapsedMilliseconds, deserializationTags);
         return eventEntry;
-    }
-
-    private async IAsyncEnumerable<(TLogEntry Log, int Version, StreamPosition StreamPosition)> ReadAsync(StreamPosition fromPosition, long maxCount, [EnumeratorCancellation] CancellationToken token)
-    {
-        var readResult = client.ReadStreamAsync(Direction.Forwards, streamName, fromPosition, maxCount, false, token);
-
-        await foreach (var logEntry in readResult.ConfigureAwait(true))
-        {
-            yield return (Deserialize(logEntry), logEntry.OriginalEventNumber.ToVersion(), logEntry.OriginalEventNumber);
-        }
     }
 
     public async Task Synchronize()
