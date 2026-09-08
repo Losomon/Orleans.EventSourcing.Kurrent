@@ -169,6 +169,56 @@ namespace Orleans.EventSourcing.Kurrent.Tests
             }
         }
 
+        [Fact]
+        public async Task ConditionalAppendRetryPatternHealsAfterExternalWrite()
+        {
+            var streamNameProvider = new KurrentStreamName();
+            var services = new TestLogConsistencyProtocolServices();
+            var client = new InMemoryKurrentClient();
+            var serializer = new TestEventSerializer();
+            var streamName = streamNameProvider.GetStreamName(services.GrainId);
+            var adapter = CreateAdapter(client, services, streamNameProvider, serializer);
+
+            try
+            {
+                Assert.True(await adapter.TryAppend(new Applied(100)));
+
+                // Another writer appends behind the adapter's back (e.g. a duplicate activation).
+                var externalWrite = await client.ConditionalAppendToStreamAsync(streamName,
+                                                                                StreamState.StreamRevision(0),
+                                                                                [serializer.SerializeEvent(new Applied(7))],
+                                                                                TestContext.Current.CancellationToken);
+                Assert.Equal(ConditionalWriteStatus.Succeeded, externalWrite.Status);
+
+                // The conditional append is rejected because the expected version is stale.
+                Assert.False(await adapter.TryAppend(new Applied(50)));
+
+                // Until the log is resynchronized the views are diverged: the tentative view still
+                // contains the rejected entry and the confirmed view is missing the external write.
+                Assert.Equal(150, adapter.TentativeView.Balance);
+                Assert.Equal(100, adapter.ConfirmedView.Balance);
+                Assert.Equal(1, adapter.ConfirmedVersion);
+
+                // The documented retry pattern: synchronize, re-validate, then retry the append.
+                await adapter.Synchronize();
+
+                Assert.Equal(107, adapter.ConfirmedView.Balance);
+                Assert.Equal(107, adapter.TentativeView.Balance);
+                Assert.Equal(2, adapter.ConfirmedVersion);
+
+                Assert.True(await adapter.TryAppend(new Applied(50)));
+
+                Assert.Equal(157, adapter.ConfirmedView.Balance);
+                Assert.Equal(157, adapter.TentativeView.Balance);
+                Assert.Equal(3, adapter.ConfirmedVersion);
+            }
+            finally
+            {
+                adapter.Dispose();
+                await client.DisposeAsync();
+            }
+        }
+
         private static KurrentLogViewAdapter<TestView, TestLogEntry> CreateAdapter(IKurrentClient client,
                                                                                     TestLogConsistencyProtocolServices services,
                                                                                     IKurrentStreamNameProvider streamNameProvider,
