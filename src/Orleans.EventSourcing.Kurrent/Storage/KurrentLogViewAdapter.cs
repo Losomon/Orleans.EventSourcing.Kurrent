@@ -306,6 +306,12 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
     private async Task<bool> ObservePendingWritesAsync()
     {
         await observationTail.ConfigureAwait(true);
+
+        // Consume both flags unconditionally so a rejection recorded by one batch never leaks
+        // into the outcome of a later, unrelated call once an earlier failure has been thrown.
+        var rejected = writeRejected;
+        writeRejected = false;
+
         if (writeFailures is not null)
         {
             var failure = writeFailures[0];
@@ -313,13 +319,7 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
             throw KurrentExceptionConverter.ConvertException(failure);
         }
 
-        if (writeRejected)
-        {
-            writeRejected = false;
-            return false;
-        }
-
-        return true;
+        return !rejected;
     }
 
     /// <summary>
@@ -434,8 +434,17 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
         {
             disposed = true;
             disposeCts.Cancel(); // cancelled before disposal so in-flight links observe it safely
-            observationTail.Ignore();
-            disposeCts.Dispose();
+
+            // Don't dispose disposeCts until every in-flight link has actually observed the
+            // cancellation and completed; otherwise a link still awaiting Kurrent I/O could
+            // access a disposed CancellationTokenSource. Continue off the grain scheduler so
+            // this never blocks the caller.
+            observationTail.ContinueWith(
+                static (_, state) => ((CancellationTokenSource)state!).Dispose(),
+                disposeCts,
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default).Ignore();
         }
     }
 
