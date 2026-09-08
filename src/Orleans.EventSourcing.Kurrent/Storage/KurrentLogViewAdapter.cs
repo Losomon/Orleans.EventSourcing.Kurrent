@@ -302,15 +302,14 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
     /// <summary>
     /// Awaits the observation chain, then surfaces any recorded outcome: throws (converted) for
     /// infrastructure failures, returns false if any write was rejected with a version mismatch.
+    /// A rejection means the grain's view of the stream version is stale and the true stream
+    /// state is unknown, so <see cref="writeRejected"/> is left set until a reload
+    /// (<see cref="Synchronize"/>/<see cref="ClearLogAsync"/>) re-establishes a known state;
+    /// every call made in the meantime keeps reporting the rejection.
     /// </summary>
     private async Task<bool> ObservePendingWritesAsync()
     {
         await observationTail.ConfigureAwait(true);
-
-        // Consume both flags unconditionally so a rejection recorded by one batch never leaks
-        // into the outcome of a later, unrelated call once an earlier failure has been thrown.
-        var rejected = writeRejected;
-        writeRejected = false;
 
         if (writeFailures is not null)
         {
@@ -319,13 +318,13 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
             throw KurrentExceptionConverter.ConvertException(failure);
         }
 
-        return !rejected;
+        return !writeRejected;
     }
 
     /// <summary>
     /// Runs a full stream load as a chain link, keeping it FIFO with any writes submitted by
     /// interleaved grain calls. A successful load re-establishes a known stream state, clearing
-    /// any write-failure poison.
+    /// any write-failure or rejection poison.
     /// </summary>
     private async Task<LoadResult> RunLoadAsync(Task previous)
     {
@@ -334,6 +333,7 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
         disposeCts.Token.ThrowIfCancellationRequested();
         var result = await LoadAsync(context, disposeCts.Token).ConfigureAwait(true);
         streamFault = null;
+        writeRejected = false;
         return result;
     }
 
@@ -359,6 +359,7 @@ internal sealed class KurrentLogViewAdapter<TLogView, TLogEntry> : ILogViewAdapt
 
         // The stream is gone; there is nothing left to be inconsistent with.
         streamFault = null;
+        writeRejected = false;
     }
 
     /// <summary>
