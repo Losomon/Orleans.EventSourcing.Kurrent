@@ -5,6 +5,7 @@ using KurrentDB.Client;
 
 using Microsoft.Extensions.Logging;
 using Orleans.EventSourcing.Kurrent.Storage;
+using Orleans.Storage;
 
 namespace Orleans.EventSourcing.Kurrent.Tests
 {
@@ -161,6 +162,100 @@ namespace Orleans.EventSourcing.Kurrent.Tests
                 Assert.Collection(visibleEvents,
                                   entry => Assert.IsType<Truncate>(entry),
                                   entry => Assert.Equal(42, Assert.IsType<Applied>(entry).Amount));
+            }
+            finally
+            {
+                adapter.Dispose();
+                await client.DisposeAsync();
+            }
+        }
+
+        [Fact]
+        public async Task ConditionalAppendRetryPatternHealsAfterExternalWrite()
+        {
+            var streamNameProvider = new KurrentStreamName();
+            var services = new TestLogConsistencyProtocolServices();
+            var client = new InMemoryKurrentClient();
+            var serializer = new TestEventSerializer();
+            var streamName = streamNameProvider.GetStreamName(services.GrainId);
+            var adapter = CreateAdapter(client, services, streamNameProvider, serializer);
+
+            try
+            {
+                Assert.True(await adapter.TryAppend(new Applied(100)));
+
+                // Another writer appends behind the adapter's back (e.g. a duplicate activation).
+                var externalWrite = await client.ConditionalAppendToStreamAsync(streamName,
+                                                                                StreamState.StreamRevision(0),
+                                                                                [serializer.SerializeEvent(new Applied(7))],
+                                                                                TestContext.Current.CancellationToken);
+                Assert.Equal(ConditionalWriteStatus.Succeeded, externalWrite.Status);
+
+                // The conditional append is rejected because the expected version is stale.
+                Assert.False(await adapter.TryAppend(new Applied(50)));
+
+                // Until the log is resynchronized the views are diverged: the tentative view still
+                // contains the rejected entry and the confirmed view is missing the external write.
+                Assert.Equal(150, adapter.TentativeView.Balance);
+                Assert.Equal(100, adapter.ConfirmedView.Balance);
+                Assert.Equal(1, adapter.ConfirmedVersion);
+
+                // The documented retry pattern: synchronize, re-validate, then retry the append.
+                await adapter.Synchronize();
+
+                Assert.Equal(107, adapter.ConfirmedView.Balance);
+                Assert.Equal(107, adapter.TentativeView.Balance);
+                Assert.Equal(2, adapter.ConfirmedVersion);
+
+                Assert.True(await adapter.TryAppend(new Applied(50)));
+
+                Assert.Equal(157, adapter.ConfirmedView.Balance);
+                Assert.Equal(157, adapter.TentativeView.Balance);
+                Assert.Equal(3, adapter.ConfirmedVersion);
+            }
+            finally
+            {
+                adapter.Dispose();
+                await client.DisposeAsync();
+            }
+        }
+
+        [Fact]
+        public async Task RejectionStaysReportedUntilResynchronized()
+        {
+            var streamNameProvider = new KurrentStreamName();
+            var services = new TestLogConsistencyProtocolServices();
+            var client = new InMemoryKurrentClient();
+            var serializer = new TestEventSerializer();
+            var streamName = streamNameProvider.GetStreamName(services.GrainId);
+            var adapter = CreateAdapter(client, services, streamNameProvider, serializer);
+
+            try
+            {
+                Assert.True(await adapter.TryAppend(new Applied(100)));
+
+                // Another writer appends behind the adapter's back (e.g. a duplicate activation).
+                var externalWrite = await client.ConditionalAppendToStreamAsync(streamName,
+                                                                                StreamState.StreamRevision(0),
+                                                                                [serializer.SerializeEvent(new Applied(7))],
+                                                                                TestContext.Current.CancellationToken);
+                Assert.Equal(ConditionalWriteStatus.Succeeded, externalWrite.Status);
+
+                // The conditional append is rejected because the expected version is stale.
+                Assert.False(await adapter.TryAppend(new Applied(50)));
+
+                // The stream state is unknown until a reload happens, so the rejection is not
+                // consumed by simply observing it once: further calls (even with no new writes
+                // queued) keep reporting the stale rejection.
+                await Assert.ThrowsAsync<InconsistentStateException>(() => adapter.ConfirmSubmittedEntries());
+                await Assert.ThrowsAsync<InconsistentStateException>(() => adapter.ConfirmSubmittedEntries());
+                Assert.False(await adapter.TryAppend(new Applied(1)));
+
+                // Resynchronizing re-establishes a known state and clears the rejection.
+                await adapter.Synchronize();
+
+                await adapter.ConfirmSubmittedEntries();
+                Assert.True(await adapter.TryAppend(new Applied(50)));
             }
             finally
             {

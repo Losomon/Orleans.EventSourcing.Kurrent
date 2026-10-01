@@ -119,6 +119,41 @@ public sealed class AccountGrain : JournaledGrain<AccountState, AccountEvent>, I
 }
 ```
 
+### Handling concurrent writes (`RaiseConditionalEvent`)
+
+Every append uses optimistic concurrency: the provider writes with the exact stream revision it last observed, so a write is rejected if the stream was mutated by another writer (for example a duplicate activation during cluster membership changes, or an external process writing to the grain's stream).
+
+- `RaiseEvent` + `ConfirmEvents()`: a rejected write surfaces as an `InconsistentStateException`, which causes Orleans to deactivate the grain. The next activation replays the stream and sees the true state.
+- `RaiseConditionalEvent`: a rejected write returns `false` and the event is discarded — it is **never** retried automatically, because the conditions under which it was raised may no longer hold.
+
+After `RaiseConditionalEvent` returns `false`, the in-memory views are stale: the tentative view still reflects the rejected event, and the confirmed view is missing the competing writer's events. You must resynchronize (or deactivate) before trusting the state or writing again. The correct retry pattern is:
+
+```csharp
+public async Task<bool> Withdraw(decimal amount, CancellationToken token)
+{
+    while (true)
+    {
+        token.ThrowIfCancellationRequested();
+        
+        // Re-validate against the current state on every iteration.
+        if (State.Balance < amount)
+        {
+            return false;
+        }
+
+        if (await RaiseConditionalEvent(new AccountEvent.Withdrawn(amount)))
+        {
+            return true;
+        }
+
+        // The write was rejected: resynchronize with the stream before re-deciding.
+        await RefreshNow();
+    }
+}
+```
+
+Consider bounding the loop (retry cap or backoff): persistent rejections usually indicate a competing writer, and throwing after a few attempts lets the activation recycle and recover cleanly.
+
 ### Truncating the event stream - Experimental
 
 The provider supports truncating the event stream by using the `DiscardPriorEvents` attribute on an event type (`OEK0002` — suppress with `#pragma warning disable OEK0002` or `<NoWarn>$(NoWarn);OEK0002</NoWarn>`).
